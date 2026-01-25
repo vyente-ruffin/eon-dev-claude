@@ -374,9 +374,94 @@ resource eonApiClaude 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 // ============================================================================
+// Static Web App (Frontend)
+// ============================================================================
+
+resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
+  name: 'swa-eon-claude-${environment}'
+  location: location
+  tags: tags
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {
+    stagingEnvironmentPolicy: 'Enabled'
+    allowConfigFileUpdates: true
+    buildProperties: {
+      skipGithubActionWorkflowGeneration: true
+    }
+  }
+}
+
+// ============================================================================
+// Deployment Script - Deploy Frontend to Static Web App
+// ============================================================================
+
+resource deployFrontend 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
+  name: 'deploy-eon-frontend'
+  location: location
+  tags: tags
+  kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${deploymentIdentity.id}': {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.52.0'
+    timeout: 'PT15M'
+    retentionInterval: 'P1D'
+    cleanupPreference: 'OnSuccess'
+    scriptContent: '''
+      # Install Node.js and SWA CLI
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+      npm install -g @azure/static-web-apps-cli
+
+      # Clone repo and deploy frontend
+      git clone --depth 1 --branch $GIT_BRANCH $GIT_REPO_URL /tmp/repo
+      cd /tmp/repo/frontend
+
+      # Update config with API URL
+      sed -i "s|API_URL_PLACEHOLDER|https://$API_FQDN|g" js/config.js 2>/dev/null || true
+
+      # Get deployment token and deploy
+      DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name $SWA_NAME --query "properties.apiKey" -o tsv)
+      swa deploy . --deployment-token $DEPLOYMENT_TOKEN --env production
+    '''
+    environmentVariables: [
+      {
+        name: 'SWA_NAME'
+        value: staticWebApp.name
+      }
+      {
+        name: 'GIT_REPO_URL'
+        value: gitRepoUrl
+      }
+      {
+        name: 'GIT_BRANCH'
+        value: gitBranch
+      }
+      {
+        name: 'API_FQDN'
+        value: eonApiClaude.properties.configuration.ingress.fqdn
+      }
+    ]
+  }
+  dependsOn: [
+    deployIdentityRoleAssignment
+    eonApiClaude
+  ]
+}
+
+// ============================================================================
 // Outputs
 // ============================================================================
 
+output staticWebAppUrl string = 'https://${staticWebApp.properties.defaultHostname}'
+output staticWebAppName string = staticWebApp.name
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
 output containerAppEnvId string = containerAppEnv.id

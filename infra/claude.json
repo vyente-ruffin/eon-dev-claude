@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.39.26.7824",
-      "templateHash": "10344147524660083124"
+      "templateHash": "7176388118680067284"
     }
   },
   "parameters": {
@@ -181,7 +181,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.39.26.7824",
-              "templateHash": "17082764260804797675"
+              "templateHash": "16463001198421724903"
             }
           },
           "parameters": {
@@ -341,7 +341,7 @@
                 "timeout": "PT30M",
                 "retentionInterval": "P1D",
                 "cleanupPreference": "OnSuccess",
-                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-voice-claude:$IMAGE_TAG \\\n        --file services/eon-voice-claude/Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:services/eon-voice-claude\n    ",
+                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-voice-claude:$IMAGE_TAG \\\n        --file Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:services/eon-voice-claude\n    ",
                 "environmentVariables": [
                   {
                     "name": "ACR_NAME",
@@ -385,7 +385,7 @@
                 "timeout": "PT30M",
                 "retentionInterval": "P1D",
                 "cleanupPreference": "OnSuccess",
-                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-api-claude:$IMAGE_TAG \\\n        --file backend/Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:backend\n    ",
+                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-api-claude:$IMAGE_TAG \\\n        --file Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:backend\n    ",
                 "environmentVariables": [
                   {
                     "name": "ACR_NAME",
@@ -557,9 +557,80 @@
                 "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]",
                 "[resourceId('Microsoft.App/containerApps', 'eon-voice-claude')]"
               ]
+            },
+            {
+              "type": "Microsoft.Web/staticSites",
+              "apiVersion": "2023-12-01",
+              "name": "[format('swa-eon-claude-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Free",
+                "tier": "Free"
+              },
+              "properties": {
+                "stagingEnvironmentPolicy": "Enabled",
+                "allowConfigFileUpdates": true,
+                "buildProperties": {
+                  "skipGithubActionWorkflowGeneration": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "deploy-eon-frontend",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "AzureCLI",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "azCliVersion": "2.52.0",
+                "timeout": "PT15M",
+                "retentionInterval": "P1D",
+                "cleanupPreference": "OnSuccess",
+                "scriptContent": "      # Install Node.js and SWA CLI\n      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -\n      apt-get install -y nodejs\n      npm install -g @azure/static-web-apps-cli\n\n      # Clone repo and deploy frontend\n      git clone --depth 1 --branch $GIT_BRANCH $GIT_REPO_URL /tmp/repo\n      cd /tmp/repo/frontend\n\n      # Update config with API URL\n      sed -i \"s|API_URL_PLACEHOLDER|https://$API_FQDN|g\" js/config.js 2>/dev/null || true\n\n      # Get deployment token and deploy\n      DEPLOYMENT_TOKEN=$(az staticwebapp secrets list --name $SWA_NAME --query \"properties.apiKey\" -o tsv)\n      swa deploy . --deployment-token $DEPLOYMENT_TOKEN --env production\n    ",
+                "environmentVariables": [
+                  {
+                    "name": "SWA_NAME",
+                    "value": "[format('swa-eon-claude-{0}', parameters('environment'))]"
+                  },
+                  {
+                    "name": "GIT_REPO_URL",
+                    "value": "[parameters('gitRepoUrl')]"
+                  },
+                  {
+                    "name": "GIT_BRANCH",
+                    "value": "[parameters('gitBranch')]"
+                  },
+                  {
+                    "name": "API_FQDN",
+                    "value": "[reference(resourceId('Microsoft.App/containerApps', 'eon-api-claude'), '2024-03-01').configuration.ingress.fqdn]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, format('id-eon-deploy-{0}', parameters('environment')), variables('contributorRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment')))]",
+                "[resourceId('Microsoft.App/containerApps', 'eon-api-claude')]",
+                "[resourceId('Microsoft.Web/staticSites', format('swa-eon-claude-{0}', parameters('environment')))]"
+              ]
             }
           ],
           "outputs": {
+            "staticWebAppUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/staticSites', format('swa-eon-claude-{0}', parameters('environment'))), '2023-12-01').defaultHostname)]"
+            },
+            "staticWebAppName": {
+              "type": "string",
+              "value": "[format('swa-eon-claude-{0}', parameters('environment'))]"
+            },
             "acrLoginServer": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]"
@@ -620,6 +691,14 @@
     "eonVoiceClaudeFqdn": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.eonVoiceClaudeFqdn.value]"
+    },
+    "staticWebAppUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.staticWebAppUrl.value]"
+    },
+    "staticWebAppName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.staticWebAppName.value]"
     }
   }
 }
