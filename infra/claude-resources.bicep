@@ -153,7 +153,7 @@ resource buildVoiceImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
       az acr build \
         --registry $ACR_NAME \
         --image eon-voice-claude:$IMAGE_TAG \
-        --file services/eon-voice-claude/Dockerfile \
+        --file Dockerfile \
         $GIT_REPO_URL#$GIT_BRANCH:services/eon-voice-claude
     '''
     environmentVariables: [
@@ -200,7 +200,7 @@ resource buildApiImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
       az acr build \
         --registry $ACR_NAME \
         --image eon-api-claude:$IMAGE_TAG \
-        --file backend/Dockerfile \
+        --file Dockerfile \
         $GIT_REPO_URL#$GIT_BRANCH:backend
     '''
     environmentVariables: [
