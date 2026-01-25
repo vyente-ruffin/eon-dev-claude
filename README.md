@@ -33,7 +33,24 @@ az deployment sub create -l eastus2 -f infra/claude.bicep \
 | Container App Environment | Hosts containers |
 | eon-api-claude | External API (WebSocket endpoint) |
 | eon-voice-claude | Internal voice service |
+| Static Web App | Frontend hosting |
 | User Assigned Identity | ACR pull permissions |
+
+## Deploy Frontend
+
+After Bicep deployment, deploy the frontend:
+
+```bash
+# Install SWA CLI
+npm install -g @azure/static-web-apps-cli
+
+# Get deployment token
+TOKEN=$(az staticwebapp secrets list -n swa-eon-claude-dev -g rg-eon-claude --query properties.apiKey -o tsv)
+
+# Deploy
+cd frontend
+swa deploy . --deployment-token $TOKEN
+```
 
 ## Get Your Azure OpenAI Key
 

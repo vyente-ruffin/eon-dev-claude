@@ -7,10 +7,9 @@
 // - Container App Environment
 // - eon-api-claude (external)
 // - eon-voice-claude (internal)
-// - Static Web App (frontend)
+// - Static Web App (frontend - requires manual deploy after)
 // - Role assignments for ACR pull
 // - Builds Docker images via ACR Tasks
-// - Deploys frontend to Static Web App
 //
 // Usage (ONE COMMAND):
 //   az deployment sub create -l eastus2 -f claude.bicep -p parameters/dev-claude.bicepparam
@@ -129,3 +128,4 @@ output eonApiClaudeFqdn string = resources.outputs.eonApiClaudeFqdn
 output eonVoiceClaudeFqdn string = resources.outputs.eonVoiceClaudeFqdn
 output staticWebAppUrl string = resources.outputs.staticWebAppUrl
 output staticWebAppName string = resources.outputs.staticWebAppName
+output deployFrontendCommand string = resources.outputs.deployFrontendCommand
