@@ -1,14 +1,17 @@
 /**
  * Eon Frontend Configuration
  *
- * Defines API and WebSocket URLs based on environment.
- * For eon-web-claude (microservices rebuild).
+ * Fetches API/WebSocket URLs from backend config endpoint.
+ * Works with SWA linked backend - frontend calls /api/config which proxies to Container App.
  */
 
-const EON_CONFIG = (() => {
+let EON_CONFIG = null;
+let configPromise = null;
+
+async function loadConfig() {
   const hostname = window.location.hostname;
 
-  // Local development
+  // Local development - use same origin
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return {
       API_URL: `${window.location.protocol}//${window.location.host}`,
@@ -16,17 +19,42 @@ const EON_CONFIG = (() => {
     };
   }
 
-  // eon-web-claude (microservices rebuild) - points to new isolated backend
-  if (hostname.includes('lively-cliff-043061b0f')) {
-    return {
-      API_URL: 'https://eon-api-claude.happyground-4989b4a6.eastus2.azurecontainerapps.io',
-      WS_URL: 'wss://eon-api-claude.happyground-4989b4a6.eastus2.azurecontainerapps.io'
-    };
+  // Production - fetch config from backend via SWA linked backend
+  try {
+    const response = await fetch('/api/config');
+    if (response.ok) {
+      const config = await response.json();
+      return {
+        API_URL: config.apiUrl,
+        WS_URL: config.wsUrl.replace('/ws/voice', '')  // Base URL without path
+      };
+    }
+  } catch (e) {
+    console.error('Failed to fetch config from /api/config:', e);
   }
 
-  // Default: same origin
+  // Fallback - try direct Container App URL (for debugging)
+  console.warn('Using fallback config - /api/config failed');
   return {
     API_URL: `${window.location.protocol}//${window.location.host}`,
     WS_URL: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
   };
-})();
+}
+
+/**
+ * Get config - returns a promise that resolves when config is loaded.
+ * Can be called multiple times; returns cached promise.
+ */
+function getConfig() {
+  if (!configPromise) {
+    configPromise = loadConfig().then(config => {
+      EON_CONFIG = config;
+      console.log('Eon config loaded:', EON_CONFIG);
+      return config;
+    });
+  }
+  return configPromise;
+}
+
+// Start loading config immediately
+getConfig();

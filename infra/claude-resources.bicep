@@ -382,8 +382,8 @@ resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
   location: location
   tags: tags
   sku: {
-    name: 'Free'
-    tier: 'Free'
+    name: 'Standard'
+    tier: 'Standard'
   }
   properties: {
     stagingEnvironmentPolicy: 'Enabled'
@@ -391,6 +391,16 @@ resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
     buildProperties: {
       skipGithubActionWorkflowGeneration: true
     }
+  }
+}
+
+// Link SWA to Container App backend - proxies /api/* to Container App
+resource linkedBackend 'Microsoft.Web/staticSites/linkedBackends@2023-12-01' = {
+  parent: staticWebApp
+  name: 'backend'
+  properties: {
+    backendResourceId: eonApiClaude.id
+    region: location
   }
 }
 

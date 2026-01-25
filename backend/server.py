@@ -15,7 +15,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from websockets.asyncio.client import connect as ws_connect
 import websockets.exceptions
@@ -56,12 +56,35 @@ app.add_middleware(
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     """Health check endpoint."""
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+async def get_config(request: Request):
+    """
+    Return configuration for frontend.
+
+    This endpoint is called via SWA linked backend proxy.
+    Returns the direct WebSocket URL so frontend can connect.
+    """
+    # Get the host from the request to determine our own FQDN
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
+
+    # If behind SWA, use Container App's direct FQDN from environment
+    # Otherwise use the request host
+    container_fqdn = os.environ.get("CONTAINER_APP_FQDN", host)
+
+    return {
+        "wsUrl": f"wss://{container_fqdn}/ws/voice",
+        "apiUrl": f"https://{container_fqdn}"
+    }
+
+
 @app.websocket("/ws/voice")
+@app.websocket("/api/ws/voice")
 async def voice_websocket(websocket: WebSocket, user_id: str = "anonymous"):
     """
     WebSocket endpoint for voice/text communication.

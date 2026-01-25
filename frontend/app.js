@@ -830,6 +830,9 @@ async function handleLogout() {
  * Initialize application
  */
 async function init() {
+  // Wait for config to load before connecting
+  await getConfig();
+
   // Display user info in UI
   if (isAuthenticated()) {
     // Show authenticated user name
