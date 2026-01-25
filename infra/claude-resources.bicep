@@ -415,9 +415,9 @@ resource deployFrontend 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     retentionInterval: 'P1D'
     cleanupPreference: 'OnSuccess'
     scriptContent: '''
-      # Install Node.js and SWA CLI
-      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      apt-get install -y nodejs
+      # Install Node.js and SWA CLI (Alpine Linux)
+      apk add --no-cache nodejs npm git
+
       npm install -g @azure/static-web-apps-cli
 
       # Clone repo and deploy frontend
