@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eon - Sign In</title>
+
+    <!-- Open Graph / Social Media Preview -->
+    <meta property="og:title" content="Eon - Cognitive Voice Assistant">
+    <meta property="og:description" content="AI voice assistant with long-term memory. Speak naturally and Eon remembers.">
+    <meta property="og:image" content="https://eon-api.jollyrock-9082b714.eastus2.azurecontainerapps.io/og-image.png">
+    <meta property="og:url" content="https://eon-api.jollyrock-9082b714.eastus2.azurecontainerapps.io">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Login Page Specific Styles */
+        .login-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            z-index: 10;
+        }
+
+        .login-card {
+            background: rgba(10, 14, 20, 0.8);
+            border: 1px solid var(--color-user-dim);
+            padding: 50px 60px;
+            position: relative;
+            min-width: 400px;
+        }
+
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 20px;
+            right: 20px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--color-user-primary), transparent);
+        }
+
+        .login-card::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 20px;
+            right: 20px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--color-user-dim), transparent);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .login-title {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 0.5em;
+            color: var(--color-user-primary);
+            text-shadow:
+                0 0 10px var(--color-user-glow),
+                0 0 30px var(--color-user-glow),
+                0 0 60px var(--color-user-dim);
+            margin-bottom: 12px;
+        }
+
+        .login-subtitle {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.3em;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+        }
+
+        .login-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .login-icon {
+            width: 80px;
+            height: 80px;
+            position: relative;
+        }
+
+        .login-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .login-icon .hex-outline {
+            fill: none;
+            stroke: var(--color-user-dim);
+            stroke-width: 1;
+        }
+
+        .login-icon .lock-icon {
+            fill: none;
+            stroke: var(--color-user-primary);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        #login-button,
+        #signup-button {
+            font-family: var(--font-display);
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            border: none;
+            padding: 16px 40px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        #login-button {
+            color: var(--color-bg-deep);
+            background: var(--color-user-primary);
+        }
+
+        #signup-button {
+            color: var(--color-user-primary);
+            background: transparent;
+            border: 1px solid var(--color-user-primary);
+        }
+
+        #login-button::before,
+        #signup-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        #login-button:hover {
+            box-shadow:
+                0 0 20px var(--color-user-glow),
+                0 0 40px var(--color-user-dim);
+            transform: translateY(-2px);
+        }
+
+        #signup-button:hover {
+            background: rgba(0, 212, 255, 0.1);
+            box-shadow:
+                0 0 20px var(--color-user-glow),
+                0 0 40px var(--color-user-dim);
+            transform: translateY(-2px);
+        }
+
+        #login-button:hover::before,
+        #signup-button:hover::before {
+            left: 100%;
+        }
+
+        #login-button:disabled,
+        #signup-button:disabled {
+            background: var(--color-text-dim);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #signup-button:disabled {
+            border-color: var(--color-text-dim);
+            color: var(--color-text-dim);
+        }
+
+        #login-button.loading,
+        #signup-button.loading {
+            color: transparent;
+        }
+
+        #login-button.loading::after,
+        #signup-button.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid var(--color-bg-deep);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        #signup-button.loading::after {
+            border-color: var(--color-user-primary);
+            border-top-color: transparent;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .login-status {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            color: var(--color-text-dim);
+            text-align: center;
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .login-status.ready {
+            color: var(--color-text-secondary);
+        }
+
+        .login-status.connecting {
+            color: var(--color-warning);
+        }
+
+        .login-status.success {
+            color: var(--color-success);
+        }
+
+        .login-status.error {
+            color: var(--color-error);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-text-dim);
+        }
+
+        .status-indicator.ready {
+            background: var(--color-text-secondary);
+        }
+
+        .status-indicator.connecting {
+            background: var(--color-warning);
+            animation: statusBlink 0.5s ease-in-out infinite;
+        }
+
+        .status-indicator.success {
+            background: var(--color-success);
+            box-shadow: 0 0 10px var(--color-success);
+        }
+
+        .status-indicator.error {
+            background: var(--color-error);
+        }
+
+        .login-footer {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .login-footer-text {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--color-text-dim);
+            letter-spacing: 0.05em;
+        }
+
+        .login-footer-text a {
+            color: var(--color-user-primary);
+            text-decoration: none;
+        }
+
+        .login-footer-text a:hover {
+            text-decoration: underline;
+        }
+
+        /* Decorative elements */
+        .login-decoration {
+            position: absolute;
+            font-family: var(--font-mono);
+            font-size: 0.5rem;
+            color: var(--color-text-dim);
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+        }
+
+        .login-decoration.top-left {
+            top: 10px;
+            left: 10px;
+        }
+
+        .login-decoration.top-right {
+            top: 10px;
+            right: 10px;
+        }
+
+        .login-decoration.bottom-left {
+            bottom: 10px;
+            left: 10px;
+        }
+
+        .login-decoration.bottom-right {
+            bottom: 10px;
+            right: 10px;
+        }
+
+        /* Version info */
+        .version-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            color: var(--color-text-dim);
+            letter-spacing: 0.1em;
+        }
+
+        /* Responsive */
+        @media (max-width: 500px) {
+            .login-card {
+                min-width: auto;
+                width: 90%;
+                padding: 40px 30px;
+            }
+
+            .login-title {
+                font-size: 1.8rem;
+                letter-spacing: 0.3em;
+            }
+
+            .auth-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            #login-button,
+            #signup-button {
+                padding: 14px 30px;
+                font-size: 0.75rem;
+                width: 100%;
+            }
+        }
+    </style>
+
+    <!-- MSAL.js from CDN -->
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+    <div class="eon-container">
+        <!-- Corner decorations -->
+        <div class="corner-decoration top-left"></div>
+        <div class="corner-decoration top-right"></div>
+        <div class="corner-decoration bottom-left"></div>
+        <div class="corner-decoration bottom-right"></div>
+
+        <!-- Login content -->
+        <div class="login-content">
+            <div class="login-card">
+                <!-- Decorative codes -->
+                <span class="login-decoration top-left">SYS.AUTH</span>
+                <span class="login-decoration top-right">v2.0</span>
+                <span class="login-decoration bottom-left">SEC.LVL.1</span>
+                <span class="login-decoration bottom-right">EXTERNAL.ID</span>
+
+                <!-- Header -->
+                <div class="login-header">
+                    <h1 class="login-title">E O N</h1>
+                    <p class="login-subtitle">Cognitive Voice Assistant</p>
+                </div>
+
+                <!-- Body -->
+                <div class="login-body">
+                    <!-- Lock icon -->
+                    <div class="login-icon">
+                        <svg viewBox="0 0 80 80">
+                            <!-- Hexagon outline -->
+                            <polygon class="hex-outline" points="40,5 70,22.5 70,57.5 40,75 10,57.5 10,22.5"/>
+                            <!-- Lock icon -->
+                            <g class="lock-icon" transform="translate(28, 25)">
+                                <rect x="0" y="12" width="24" height="18" rx="2"/>
+                                <path d="M4,12 V8 C4,3.58 7.58,0 12,0 C16.42,0 20,3.58 20,8 V12"/>
+                                <circle cx="12" cy="21" r="2"/>
+                                <line x1="12" y1="23" x2="12" y2="26"/>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Auth buttons -->
+                    <div class="auth-buttons">
+                        <button id="login-button" onclick="signIn()">
+                            Sign In
+                        </button>
+                        <button id="signup-button" onclick="signUp()">
+                            Sign Up
+                        </button>
+                    </div>
+
+                    <!-- Status -->
+                    <div class="login-status" id="login-status">
+                        <span class="status-indicator" id="status-indicator"></span>
+                        <span>Initializing...</span>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="login-footer">
+                    <p class="login-footer-text">
+                        Secured by <a href="https://learn.microsoft.com/en-us/entra/external-id/" target="_blank">Microsoft Entra External ID</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Version info -->
+        <div class="version-info">EON AUTH SYSTEM // TEST BUILD</div>
+    </div>
+
+    <!-- Auth configuration -->
+    <script src="js/authConfig.js?v=5"></script>
+    <!-- Login logic -->
+    <script src="js/login.js?v=5"></script>
+</body>
+</html>

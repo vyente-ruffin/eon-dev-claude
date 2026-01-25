@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eon - Cognitive Voice Assistant</title>
+
+  <!-- Open Graph / Social Media Preview -->
+  <meta property="og:title" content="Eon - Cognitive Voice Assistant">
+  <meta property="og:description" content="AI voice assistant with long-term memory. Speak naturally and Eon remembers.">
+  <meta property="og:image" content="https://eon-api.jollyrock-9082b714.eastus2.azurecontainerapps.io/og-image.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+  <div class="eon-container">
+    <!-- Corner decorations -->
+    <div class="corner-decoration top-left"></div>
+    <div class="corner-decoration top-right"></div>
+    <div class="corner-decoration bottom-left"></div>
+    <div class="corner-decoration bottom-right"></div>
+
+    <!-- Header -->
+    <header class="eon-header">
+      <h1 class="eon-title">E O N</h1>
+      <p class="eon-subtitle">Cognitive Voice Assistant</p>
+    </header>
+
+    <!-- Connection status -->
+    <div class="connection-status">
+      <div id="status-indicator" class="status-indicator disconnected"></div>
+      <span id="status-text" class="status-text">Offline</span>
+      <span class="user-id-display">User: <span id="user-id-suffix">----</span></span>
+    </div>
+
+    <!-- Dual cores -->
+    <div class="cores-container">
+      <div class="core-wrapper">
+        <span class="core-label user">Input</span>
+        <div class="core-canvas-container">
+          <canvas id="user-canvas" class="core-canvas" width="200" height="200"></canvas>
+        </div>
+        <span id="user-status" class="core-status">Active</span>
+      </div>
+
+      <div class="center-connector">
+        <div class="connector-line"></div>
+      </div>
+
+      <div class="core-wrapper">
+        <span class="core-label agent">Output</span>
+        <div class="core-canvas-container">
+          <canvas id="agent-canvas" class="core-canvas" width="200" height="200"></canvas>
+        </div>
+        <span id="agent-status" class="core-status">Standby</span>
+      </div>
+    </div>
+
+    <!-- System state -->
+    <div id="system-state" class="system-state">Standby</div>
+
+    <!-- Controls -->
+    <div class="controls-container">
+      <button id="mute-button" class="mute-button" aria-label="Mute microphone">
+        <svg id="mute-icon" class="mute-icon" viewBox="0 0 24 24">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span class="mute-shortcut">Press M</span>
+      </button>
+    </div>
+
+    <!-- Text Input (simulates voice) -->
+    <div class="text-input-container">
+      <input type="text" id="text-input" class="text-input" placeholder="Type a message (simulates voice)..." autocomplete="off">
+      <button id="send-button" class="send-button" aria-label="Send message">
+        <svg class="send-icon" viewBox="0 0 24 24">
+          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Transcript -->
+    <div id="transcript-container" class="transcript-container" style="display: none;">
+      <p id="transcript-text" class="transcript-text"></p>
+    </div>
+  </div>
+
+  <script src="js/config.js?v=1"></script>
+  <script src="js/user-id.js?v=8"></script>
+  <script src="app.js?v=11"></script>
+</body>
+</html>
