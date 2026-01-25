@@ -63,14 +63,11 @@ param voiceName string = 'alloy'
 @description('Azure OpenAI API key')
 param voiceApiKey string = ''
 
-@description('Git repository URL for source code (for ACR build)')
-param gitRepoUrl string = ''
+@description('Git repository URL for source code (required)')
+param gitRepoUrl string
 
 @description('Git branch to build from')
 param gitBranch string = 'main'
-
-@description('Skip image build (use existing images)')
-param skipImageBuild bool = true
 
 // ============================================================================
 // Variables
@@ -113,7 +110,6 @@ module resources 'claude-resources.bicep' = {
     voiceApiKey: voiceApiKey
     gitRepoUrl: gitRepoUrl
     gitBranch: gitBranch
-    skipImageBuild: skipImageBuild
     tags: tags
   }
 }

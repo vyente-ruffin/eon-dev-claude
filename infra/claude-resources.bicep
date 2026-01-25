@@ -24,7 +24,6 @@ param voiceApiKey string
 
 param gitRepoUrl string
 param gitBranch string
-param skipImageBuild bool
 param tags object
 
 // ============================================================================
@@ -112,7 +111,7 @@ resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 // User Assigned Managed Identity (for deployment scripts)
 // ============================================================================
 
-resource deploymentIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = if (!skipImageBuild) {
+resource deploymentIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-eon-deploy-${environment}'
   location: location
   tags: tags
@@ -121,7 +120,7 @@ resource deploymentIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@20
 // Contributor role for deployment script to run ACR build
 var contributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
 
-resource deployIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipImageBuild) {
+resource deployIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(resourceGroup().id, 'id-eon-deploy-${environment}', contributorRoleId)
   properties: {
     principalId: deploymentIdentity.properties.principalId
@@ -134,7 +133,7 @@ resource deployIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2
 // Deployment Scripts - Build Docker Images via ACR Tasks
 // ============================================================================
 
-resource buildVoiceImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!skipImageBuild && !empty(gitRepoUrl)) {
+resource buildVoiceImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'build-eon-voice-claude'
   location: location
   tags: tags
@@ -181,7 +180,7 @@ resource buildVoiceImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = if
   ]
 }
 
-resource buildApiImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = if (!skipImageBuild && !empty(gitRepoUrl)) {
+resource buildApiImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'build-eon-api-claude'
   location: location
   tags: tags
@@ -303,6 +302,7 @@ resource eonVoiceClaude 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     acrPullRoleAssignment
+    buildVoiceImage
   ]
 }
 
@@ -369,6 +369,7 @@ resource eonApiClaude 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     acrPullRoleAssignment
+    buildApiImage
   ]
 }
 

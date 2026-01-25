@@ -1,0 +1,625 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "10344147524660083124"
+    }
+  },
+  "parameters": {
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-eon-dev-claude",
+      "metadata": {
+        "description": "Resource group name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "eastus2",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "project": {
+      "type": "string",
+      "defaultValue": "eon-claude",
+      "metadata": {
+        "description": "Project name used for tagging and naming"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "metadata": {
+        "description": "Environment name (dev, prod)"
+      }
+    },
+    "acrName": {
+      "type": "string",
+      "defaultValue": "[format('eonacr{0}', uniqueString(subscription().subscriptionId, parameters('resourceGroupName')))]",
+      "metadata": {
+        "description": "Azure Container Registry name (must be globally unique)"
+      }
+    },
+    "containerAppEnvName": {
+      "type": "string",
+      "defaultValue": "eon-env-claude",
+      "metadata": {
+        "description": "Container App Environment name"
+      }
+    },
+    "logAnalyticsName": {
+      "type": "string",
+      "defaultValue": "eon-logs-claude",
+      "metadata": {
+        "description": "Log Analytics Workspace name"
+      }
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "v1.0.0",
+      "metadata": {
+        "description": "Image tag to deploy"
+      }
+    },
+    "azureOpenAiEndpoint": {
+      "type": "string",
+      "defaultValue": "https://jarvis-voice-openai.openai.azure.com",
+      "metadata": {
+        "description": "Azure OpenAI endpoint"
+      }
+    },
+    "azureOpenAiDeployment": {
+      "type": "string",
+      "defaultValue": "gpt-realtime",
+      "metadata": {
+        "description": "Azure OpenAI deployment name"
+      }
+    },
+    "voiceName": {
+      "type": "string",
+      "defaultValue": "alloy",
+      "metadata": {
+        "description": "Voice name for TTS"
+      }
+    },
+    "voiceApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI API key"
+      }
+    },
+    "gitRepoUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "Git repository URL for source code (required)"
+      }
+    },
+    "gitBranch": {
+      "type": "string",
+      "defaultValue": "main",
+      "metadata": {
+        "description": "Git branch to build from"
+      }
+    }
+  },
+  "variables": {
+    "tags": {
+      "project": "[parameters('project')]",
+      "Creator": "claude",
+      "CreatedOn": "2026-01-24",
+      "environment": "[parameters('environment')]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "eon-claude-resources",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "acrName": {
+            "value": "[parameters('acrName')]"
+          },
+          "containerAppEnvName": {
+            "value": "[parameters('containerAppEnvName')]"
+          },
+          "logAnalyticsName": {
+            "value": "[parameters('logAnalyticsName')]"
+          },
+          "imageTag": {
+            "value": "[parameters('imageTag')]"
+          },
+          "azureOpenAiEndpoint": {
+            "value": "[parameters('azureOpenAiEndpoint')]"
+          },
+          "azureOpenAiDeployment": {
+            "value": "[parameters('azureOpenAiDeployment')]"
+          },
+          "voiceName": {
+            "value": "[parameters('voiceName')]"
+          },
+          "voiceApiKey": {
+            "value": "[parameters('voiceApiKey')]"
+          },
+          "gitRepoUrl": {
+            "value": "[parameters('gitRepoUrl')]"
+          },
+          "gitBranch": {
+            "value": "[parameters('gitBranch')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "17082764260804797675"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "acrName": {
+              "type": "string"
+            },
+            "containerAppEnvName": {
+              "type": "string"
+            },
+            "logAnalyticsName": {
+              "type": "string"
+            },
+            "imageTag": {
+              "type": "string"
+            },
+            "azureOpenAiEndpoint": {
+              "type": "string"
+            },
+            "azureOpenAiDeployment": {
+              "type": "string"
+            },
+            "voiceName": {
+              "type": "string"
+            },
+            "voiceApiKey": {
+              "type": "securestring"
+            },
+            "gitRepoUrl": {
+              "type": "string"
+            },
+            "gitBranch": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "acrPullRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+            "contributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('acrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Basic"
+              },
+              "properties": {
+                "adminUserEnabled": false
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('logAnalyticsName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30
+              }
+            },
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('containerAppEnvName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "appLogsConfiguration": {
+                  "destination": "log-analytics",
+                  "logAnalyticsConfiguration": {
+                    "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName')), '2023-09-01').customerId]",
+                    "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName')), '2023-09-01').primarySharedKey]"
+                  }
+                },
+                "workloadProfiles": [
+                  {
+                    "name": "Consumption",
+                    "workloadProfileType": "Consumption"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-eon-acr-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', parameters('acrName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))), variables('acrPullRoleId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))), '2023-01-31').principalId]",
+                "roleDefinitionId": "[variables('acrPullRoleId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-eon-deploy-{0}', parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, format('id-eon-deploy-{0}', parameters('environment')), variables('contributorRoleId'))]",
+              "properties": {
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment'))), '2023-01-31').principalId]",
+                "roleDefinitionId": "[variables('contributorRoleId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "build-eon-voice-claude",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "AzureCLI",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "azCliVersion": "2.52.0",
+                "timeout": "PT30M",
+                "retentionInterval": "P1D",
+                "cleanupPreference": "OnSuccess",
+                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-voice-claude:$IMAGE_TAG \\\n        --file services/eon-voice-claude/Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:services/eon-voice-claude\n    ",
+                "environmentVariables": [
+                  {
+                    "name": "ACR_NAME",
+                    "value": "[parameters('acrName')]"
+                  },
+                  {
+                    "name": "IMAGE_TAG",
+                    "value": "[parameters('imageTag')]"
+                  },
+                  {
+                    "name": "GIT_REPO_URL",
+                    "value": "[parameters('gitRepoUrl')]"
+                  },
+                  {
+                    "name": "GIT_BRANCH",
+                    "value": "[parameters('gitBranch')]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, format('id-eon-deploy-{0}', parameters('environment')), variables('contributorRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "build-eon-api-claude",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "AzureCLI",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "azCliVersion": "2.52.0",
+                "timeout": "PT30M",
+                "retentionInterval": "P1D",
+                "cleanupPreference": "OnSuccess",
+                "scriptContent": "      az acr build \\\n        --registry $ACR_NAME \\\n        --image eon-api-claude:$IMAGE_TAG \\\n        --file backend/Dockerfile \\\n        $GIT_REPO_URL#$GIT_BRANCH:backend\n    ",
+                "environmentVariables": [
+                  {
+                    "name": "ACR_NAME",
+                    "value": "[parameters('acrName')]"
+                  },
+                  {
+                    "name": "IMAGE_TAG",
+                    "value": "[parameters('imageTag')]"
+                  },
+                  {
+                    "name": "GIT_REPO_URL",
+                    "value": "[parameters('gitRepoUrl')]"
+                  },
+                  {
+                    "name": "GIT_BRANCH",
+                    "value": "[parameters('gitBranch')]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, format('id-eon-deploy-{0}', parameters('environment')), variables('contributorRoleId')))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-deploy-{0}', parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "eon-voice-claude",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "ingress": {
+                    "external": false,
+                    "targetPort": 8000,
+                    "transport": "auto",
+                    "allowInsecure": false
+                  },
+                  "registries": [
+                    {
+                      "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment')))]"
+                    }
+                  ],
+                  "secrets": [
+                    {
+                      "name": "voice-api-key",
+                      "value": "[if(empty(parameters('voiceApiKey')), 'PLACEHOLDER_SET_AFTER_DEPLOY', parameters('voiceApiKey'))]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "eon-voice-claude",
+                      "image": "[format('{0}/eon-voice-claude:{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer, parameters('imageTag'))]",
+                      "resources": {
+                        "cpu": "[json('0.5')]",
+                        "memory": "1Gi"
+                      },
+                      "env": [
+                        {
+                          "name": "VOICE_ENDPOINT",
+                          "value": "[parameters('azureOpenAiEndpoint')]"
+                        },
+                        {
+                          "name": "VOICE_MODEL",
+                          "value": "[parameters('azureOpenAiDeployment')]"
+                        },
+                        {
+                          "name": "VOICE_NAME",
+                          "value": "[parameters('voiceName')]"
+                        },
+                        {
+                          "name": "VOICE_API_KEY",
+                          "secretRef": "voice-api-key"
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 0,
+                    "maxReplicas": 3
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment')))]",
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.Resources/deploymentScripts', 'build-eon-voice-claude')]",
+                "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "eon-api-claude",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 8000,
+                    "transport": "auto",
+                    "allowInsecure": false
+                  },
+                  "registries": [
+                    {
+                      "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]",
+                      "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment')))]"
+                    }
+                  ],
+                  "secrets": [
+                    {
+                      "name": "voice-api-key",
+                      "value": "[if(empty(parameters('voiceApiKey')), 'PLACEHOLDER_SET_AFTER_DEPLOY', parameters('voiceApiKey'))]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "eon-api-claude",
+                      "image": "[format('{0}/eon-api-claude:{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer, parameters('imageTag'))]",
+                      "resources": {
+                        "cpu": "[json('0.5')]",
+                        "memory": "1Gi"
+                      },
+                      "env": [
+                        {
+                          "name": "VOICE_SERVICE_URL",
+                          "value": "[format('wss://{0}/ws/voice', reference(resourceId('Microsoft.App/containerApps', 'eon-voice-claude'), '2024-03-01').configuration.ingress.fqdn)]"
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 0,
+                    "maxReplicas": 1
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment')))]",
+                "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-eon-acr-{0}', parameters('environment'))), variables('acrPullRoleId')))]",
+                "[resourceId('Microsoft.Resources/deploymentScripts', 'build-eon-api-claude')]",
+                "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]",
+                "[resourceId('Microsoft.App/containerApps', 'eon-voice-claude')]"
+              ]
+            }
+          ],
+          "outputs": {
+            "acrLoginServer": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]"
+            },
+            "acrName": {
+              "type": "string",
+              "value": "[parameters('acrName')]"
+            },
+            "containerAppEnvId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]"
+            },
+            "containerAppEnvDefaultDomain": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName')), '2024-03-01').defaultDomain]"
+            },
+            "eonApiClaudeFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', 'eon-api-claude'), '2024-03-01').configuration.ingress.fqdn]"
+            },
+            "eonVoiceClaudeFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', 'eon-voice-claude'), '2024-03-01').configuration.ingress.fqdn]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[parameters('resourceGroupName')]"
+    },
+    "acrLoginServer": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.acrLoginServer.value]"
+    },
+    "acrName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.acrName.value]"
+    },
+    "containerAppEnvId": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.containerAppEnvId.value]"
+    },
+    "containerAppEnvDefaultDomain": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.containerAppEnvDefaultDomain.value]"
+    },
+    "eonApiClaudeFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.eonApiClaudeFqdn.value]"
+    },
+    "eonVoiceClaudeFqdn": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'eon-claude-resources'), '2025-04-01').outputs.eonVoiceClaudeFqdn.value]"
+    }
+  }
+}
