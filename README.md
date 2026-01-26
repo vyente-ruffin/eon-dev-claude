@@ -6,10 +6,10 @@ Voice-enabled AI assistant with long-term memory and swappable voice providers.
 
 ```
 Frontend (SWA) → eon-api-claude → eon-voice-claude → Azure OpenAI Realtime
-                      ↓
-               eon-memory-claude → Redis (persistent storage)
-                      ↓
-                Azure OpenAI (embeddings + chat)
+                       ↓
+                eon-memory-claude → Redis (persistent storage)
+                       ↓
+                 Azure OpenAI (embeddings + chat)
 ```
 
 The Static Web App's linked backend proxies `/api/*` requests to the Container App.
@@ -17,86 +17,95 @@ The Static Web App's linked backend proxies `/api/*` requests to the Container A
 ## Prerequisites
 
 - Azure CLI installed and logged in (`az login`)
+- GitHub CLI installed and logged in (`gh auth login`)
 - Azure OpenAI resource with `gpt-4o-mini-realtime-preview` deployment (for voice)
-- GitHub CLI (`gh`) for automated secret configuration
+- **Azure OpenAI quota available** (minimum: 50K TPM for gpt-4o-mini, 10K TPM for text-embedding-3-small)
 - Node.js 18+ (for SWA CLI)
 - Git
 
-### Azure OpenAI Quota Requirements
+## Deploy via GitHub Actions
 
-The deployment creates an Azure OpenAI resource that requires:
-- **gpt-4o-mini**: ~10 TPM (Tokens Per Minute) minimum
-- **text-embedding-3-small**: ~10 TPM minimum
+This is the recommended deployment method. Follow these steps exactly.
 
-Check your quota: `az cognitiveservices usage list -l eastus2 -o table`
-
-## Quick Start (Automated)
-
-The setup script handles service principal creation, role assignments, quota checks, and GitHub secrets:
+### Step 1: Fork and Clone
 
 ```bash
-# Clone the repo
-git clone https://github.com/your-org/eon-dev-claude.git
-cd eon-dev-claude
-
-# Run automated setup (replace with your subscription ID and GitHub repo)
-./scripts/setup-azure.sh <SUBSCRIPTION_ID> owner/eon-dev-claude
-
-# Then run the GitHub Actions workflow
-# Actions → "Deploy Eon Claude" → Run workflow
-```
-
-The script will:
-1. Check and purge soft-deleted OpenAI resources (which hold quota)
-2. Verify available Azure OpenAI quota
-3. Create service principal with correct roles (Contributor + User Access Administrator)
-4. Configure GitHub secrets automatically
-
-## Deploy Options
-
-### Option A: GitHub Actions (Recommended)
-
-1. **Run the setup script** (see Quick Start above), OR manually:
-
-2. **Create Azure Service Principal with correct roles**:
-   ```bash
-   # Create SP with Contributor role
-   az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
-     --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> --sdk-auth > azure-creds.json
-
-   # Add User Access Administrator role (required for role assignments)
-   SP_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
-   az role assignment create --assignee-object-id "$SP_ID" \
-     --assignee-principal-type ServicePrincipal \
-     --role "User Access Administrator" \
-     --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
-   ```
-
-3. **Configure GitHub Secrets** (Settings → Secrets and variables → Actions):
-
-   | Secret Name | Description | Required |
-   |-------------|-------------|----------|
-   | `AZURE_CREDENTIALS` | JSON from azure-creds.json | Yes |
-   | `VOICE_ENDPOINT` | Azure OpenAI endpoint (e.g., `https://your-openai.openai.azure.com`) | Yes |
-   | `VOICE_API_KEY` | Azure OpenAI API key for voice | Yes |
-   | `MEMORY_API_KEY` | Azure OpenAI API key for memory (optional, auto-provisioned if not set) | No |
-
-4. **Run the workflow**:
-   - Go to Actions → "Deploy Eon Claude"
-   - Click "Run workflow"
-   - Select environment (dev/prod) and region
-   - Click "Run workflow"
-
-### Option B: Manual CLI Deploy
-
-#### Step 0: Clone the Repository
-
-```bash
-git clone https://github.com/your-org/eon-dev-claude.git
+# Fork via GitHub UI, then clone your fork
+git clone https://github.com/<YOUR_ORG>/eon-dev-claude.git
 cd eon-dev-claude
 ```
 
-#### Step 1: Deploy Infrastructure
+### Step 2: Create Azure Service Principal
+
+The service principal needs TWO roles: Contributor (to create resources) and User Access Administrator (to assign roles to managed identities).
+
+```bash
+# Set your subscription ID
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# Create service principal with Contributor role and save credentials
+az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
+  --scopes /subscriptions/$SUBSCRIPTION_ID --sdk-auth > sp-credentials.json
+
+# Get the service principal object ID
+SP_OBJECT_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
+
+# Add User Access Administrator role (required for role assignments in Bicep)
+az role assignment create --assignee $SP_OBJECT_ID \
+  --role "User Access Administrator" \
+  --scope /subscriptions/$SUBSCRIPTION_ID
+```
+
+### Step 3: Set GitHub Secrets
+
+```bash
+# Set the Azure credentials (from the JSON file created above)
+gh secret set AZURE_CREDENTIALS < sp-credentials.json
+
+# Set your Azure OpenAI endpoint (the one with gpt-4o-mini-realtime-preview)
+gh secret set VOICE_ENDPOINT -b "https://your-openai.openai.azure.com"
+
+# Set your Azure OpenAI API key
+gh secret set VOICE_API_KEY -b "your-api-key-here"
+```
+
+### Step 4: Run the Deployment
+
+```bash
+# Deploy to dev environment in eastus2
+gh workflow run deploy.yml -f environment=dev -f location=eastus2 -f image_tag=v1.0.0
+
+# Watch the deployment progress
+gh run watch
+```
+
+### Step 5: Verify Deployment
+
+```bash
+# Get the deployed URL
+RESOURCE_GROUP="rg-eon-dev-claude"  # or rg-eon-prod-claude for prod
+URL=$(az staticwebapp list -g $RESOURCE_GROUP --query "[0].defaultHostname" -o tsv)
+echo "App URL: https://$URL"
+
+# Test health endpoint
+curl https://$URL/api/health
+# Expected: {"status":"ok"}
+```
+
+Then open `https://$URL` in your browser. Status should show "Online" and "Ready".
+
+## Alternative: Manual CLI Deploy
+
+Use this if you prefer not to use GitHub Actions.
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/<YOUR_ORG>/eon-dev-claude.git
+cd eon-dev-claude
+```
+
+### Step 2: Deploy Infrastructure
 
 ```bash
 az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
@@ -104,12 +113,12 @@ az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
   -p location=eastus2 \
   -p voiceEndpoint=https://your-openai.openai.azure.com \
   -p voiceApiKey=<YOUR_AZURE_OPENAI_KEY> \
-  -p gitRepoUrl=https://github.com/your-org/eon-dev-claude.git
+  -p gitRepoUrl=https://github.com/<YOUR_ORG>/eon-dev-claude.git
 ```
 
 This creates all Azure resources and builds Docker images via ACR Tasks.
 
-#### Step 2: Disable Auto-Enabled Auth
+### Step 3: Disable Auto-Enabled Auth
 
 The linked backend auto-enables authentication on the Container App, which blocks WebSocket connections. Disable it:
 
@@ -117,14 +126,23 @@ The linked backend auto-enables authentication on the Container App, which block
 az containerapp auth update -n eon-api-claude -g rg-eon-claude --enabled false
 ```
 
-#### Step 3: Deploy Frontend
+### Step 4: Deploy Frontend
 
 ```bash
 npm install -g @azure/static-web-apps-cli
 
-swa deploy frontend \
-  --deployment-token $(az staticwebapp secrets list -n swa-eon-claude-dev -g rg-eon-claude --query properties.apiKey -o tsv) \
-  --env production
+SWA_NAME=$(az staticwebapp list -g rg-eon-claude --query "[0].name" -o tsv)
+DEPLOY_TOKEN=$(az staticwebapp secrets list -n $SWA_NAME -g rg-eon-claude --query properties.apiKey -o tsv)
+
+swa deploy frontend --deployment-token "$DEPLOY_TOKEN" --env production
+```
+
+### Step 5: Verify
+
+```bash
+URL=$(az staticwebapp list -g rg-eon-claude --query "[0].defaultHostname" -o tsv)
+echo "App URL: https://$URL"
+curl https://$URL/api/health
 ```
 
 ## Verify Deployment
@@ -202,36 +220,39 @@ az cognitiveservices account keys list \
 
 ### Deployment fails with "InsufficientQuota"
 
-Azure OpenAI has subscription-wide quota limits. To fix:
+Azure OpenAI has subscription-wide quota limits. Check your current usage:
 
 ```bash
-# Check current quota usage
-az cognitiveservices usage list -l eastus2 -o table | grep -i "gpt-4o-mini\|embedding"
-
-# List and purge soft-deleted resources (they hold quota for 48 hours)
-az cognitiveservices account list-deleted -o table
-az cognitiveservices account purge -l eastus2 -n <resource-name>
+az cognitiveservices usage list -l eastus2 --query "[?contains(name.value, 'gpt-4o-mini')]" -o table
 ```
 
-To request quota increase: Azure Portal → Azure OpenAI → Quotas → Request increase
+To free up quota, delete unused OpenAI deployments or request a quota increase in Azure Portal.
+
+If you see soft-deleted accounts holding quota:
+```bash
+# List soft-deleted accounts
+az cognitiveservices account list-deleted -o table
+
+# Purge to release quota
+az cognitiveservices account purge -l eastus2 -n <account-name> -g <resource-group>
+```
 
 ### Deployment fails with "Authorization failed for roleAssignments"
 
-The service principal needs User Access Administrator role:
+The service principal needs User Access Administrator role. Add it:
 
 ```bash
-SP_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
-az role assignment create --assignee-object-id "$SP_ID" \
-  --assignee-principal-type ServicePrincipal \
+SP_OBJECT_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
+az role assignment create --assignee $SP_OBJECT_ID \
   --role "User Access Administrator" \
-  --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
+  --scope /subscriptions/$(az account show --query id -o tsv)
 ```
 
 ### "Offline" status in browser
 
-- Check that auth is disabled: `az containerapp auth show -n eon-api-claude -g rg-eon-claude`
-- Disable if needed: `az containerapp auth update -n eon-api-claude -g rg-eon-claude --enabled false`
-- Check container logs: `az containerapp logs show -n eon-api-claude -g rg-eon-claude --follow`
+- The workflow automatically disables auth, but verify: `az containerapp show -n eon-api-claude -g rg-eon-dev-claude --query "properties.configuration.ingress.authEnabled"`
+- If true, disable it: `az containerapp auth update -n eon-api-claude -g rg-eon-dev-claude --enabled false`
+- Check container logs: `az containerapp logs show -n eon-api-claude -g rg-eon-dev-claude --follow`
 
 ### WebSocket connection fails
 
@@ -245,8 +266,8 @@ az role assignment create --assignee-object-id "$SP_ID" \
 
 ### Memory not saving
 
-- Check eon-memory-claude logs: `az containerapp logs show -n eon-memory-claude -g rg-eon-claude --follow`
-- Verify Redis is running: `az containerapp logs show -n redis-claude -g rg-eon-claude --tail 20`
+- Check eon-memory-claude logs: `az containerapp logs show -n eon-memory-claude -g rg-eon-dev-claude --follow`
+- Verify Redis is running: `az containerapp logs show -n redis-claude -g rg-eon-dev-claude --tail 20`
 
 ## Cleanup
 
