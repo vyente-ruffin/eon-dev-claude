@@ -1,0 +1,135 @@
+# Eon Claude Full Stack Deployment
+#
+# This workflow deploys the complete Eon Claude stack to Azure.
+#
+# Required GitHub Secrets:
+#   AZURE_CREDENTIALS    - Azure service principal credentials (JSON)
+#   VOICE_API_KEY        - Azure OpenAI API key for voice (realtime)
+#   VOICE_ENDPOINT       - Azure OpenAI endpoint for voice (e.g., https://your-openai.openai.azure.com)
+#
+# Optional GitHub Secrets:
+#   MEMORY_API_KEY       - Azure OpenAI API key for memory (auto-provisioned if not set)
+#
+# How to set up AZURE_CREDENTIALS:
+#   az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
+#     --scopes /subscriptions/<SUBSCRIPTION_ID> --sdk-auth
+#
+# Workflow Triggers:
+#   - Manual dispatch (workflow_dispatch) - recommended for controlled deployments
+#   - Push to main branch (optional, commented out by default)
+
+name: Deploy Eon Claude
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      location:
+        description: 'Azure region'
+        required: true
+        default: 'eastus2'
+        type: choice
+        options:
+          - eastus2
+          - centralus
+          - westus2
+          - westeurope
+          - eastasia
+      image_tag:
+        description: 'Image tag to deploy'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  DEPLOY_ENV: ${{ github.event.inputs.environment || 'dev' }}
+  DEPLOY_LOCATION: ${{ github.event.inputs.location || 'eastus2' }}
+  DEPLOY_TAG: ${{ github.event.inputs.image_tag || 'v1.0.0' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set resource group name
+        run: |
+          echo "RESOURCE_GROUP=rg-eon-${{ env.DEPLOY_ENV }}-claude" >> $GITHUB_ENV
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Infrastructure
+        id: deploy
+        env:
+          VOICE_ENDPOINT: ${{ secrets.VOICE_ENDPOINT }}
+          VOICE_API_KEY: ${{ secrets.VOICE_API_KEY }}
+          MEMORY_API_KEY: ${{ secrets.MEMORY_API_KEY }}
+          GIT_REPO: ${{ github.server_url }}/${{ github.repository }}.git
+          GIT_BRANCH: ${{ github.ref_name }}
+        run: |
+          echo "Deploying to $RESOURCE_GROUP in ${{ env.DEPLOY_LOCATION }}"
+
+          az deployment sub create \
+            --location "${{ env.DEPLOY_LOCATION }}" \
+            --name "eon-deploy-${{ github.run_number }}" \
+            --template-file infra/claude.bicep \
+            --parameters resourceGroupName="$RESOURCE_GROUP" \
+            --parameters location="${{ env.DEPLOY_LOCATION }}" \
+            --parameters environment="${{ env.DEPLOY_ENV }}" \
+            --parameters imageTag="${{ env.DEPLOY_TAG }}" \
+            --parameters voiceEndpoint="$VOICE_ENDPOINT" \
+            --parameters voiceApiKey="$VOICE_API_KEY" \
+            --parameters memoryApiKey="${MEMORY_API_KEY:-}" \
+            --parameters gitRepoUrl="$GIT_REPO" \
+            --parameters gitBranch="$GIT_BRANCH"
+
+          # Get outputs
+          STATIC_WEB_APP_NAME=$(az deployment sub show -n "eon-deploy-${{ github.run_number }}" --query 'properties.outputs.staticWebAppName.value' -o tsv)
+          STATIC_WEB_APP_URL=$(az deployment sub show -n "eon-deploy-${{ github.run_number }}" --query 'properties.outputs.staticWebAppUrl.value' -o tsv)
+
+          echo "swa_name=$STATIC_WEB_APP_NAME" >> $GITHUB_OUTPUT
+          echo "swa_url=$STATIC_WEB_APP_URL" >> $GITHUB_OUTPUT
+
+      - name: Disable Auto-Enabled Auth
+        run: |
+          # SWA linked backend auto-enables auth, which blocks WebSockets
+          echo "Disabling auto-enabled auth on Container App..."
+          az containerapp auth update -n eon-api-claude -g "$RESOURCE_GROUP" --enabled false || true
+
+      - name: Install SWA CLI
+        run: npm install -g @azure/static-web-apps-cli
+
+      - name: Deploy Frontend
+        run: |
+          DEPLOYMENT_TOKEN=$(az staticwebapp secrets list -n "${{ steps.deploy.outputs.swa_name }}" -g "$RESOURCE_GROUP" --query properties.apiKey -o tsv)
+          swa deploy frontend --deployment-token "$DEPLOYMENT_TOKEN" --env production
+
+      - name: Deployment Summary
+        env:
+          SWA_URL: ${{ steps.deploy.outputs.swa_url }}
+        run: |
+          echo "## Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend URL:** $SWA_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verify Deployment" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl $SWA_URL/api/health" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test in Browser" >> $GITHUB_STEP_SUMMARY
+          echo "1. Open $SWA_URL" >> $GITHUB_STEP_SUMMARY
+          echo "2. Allow microphone access" >> $GITHUB_STEP_SUMMARY
+          echo "3. Type a message and click Send" >> $GITHUB_STEP_SUMMARY
+          echo "4. You should hear an audio response" >> $GITHUB_STEP_SUMMARY

@@ -1,25 +1,28 @@
-// Eon Claude Infrastructure - Fully Self-Contained
+// Eon Claude Infrastructure - Full Stack
 //
 // Deploys EVERYTHING in one command:
 // - Resource Group
+// - Azure OpenAI (embeddings + chat for memory)
 // - Azure Container Registry
+// - Storage Account (for Redis persistence)
 // - Log Analytics Workspace
 // - Container App Environment
-// - eon-api-claude (external)
+// - redis-claude (internal, persistent)
+// - eon-memory-claude (external, agent-memory-server)
 // - eon-voice-claude (internal)
+// - eon-api-claude (external)
 // - Static Web App (frontend - requires manual deploy after)
-// - Role assignments for ACR pull
-// - Builds Docker images via ACR Tasks
 //
 // Usage (ONE COMMAND):
 //   az deployment sub create -l eastus2 -f claude.bicep -p parameters/dev-claude.bicepparam
 //
 // Or with inline params:
-//   az deployment sub create -l eastus2 -f claude.bicep \
-//     -p resourceGroupName=rg-eon-dev-claude \
+//   az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
+//     -p resourceGroupName=rg-eon-claude \
 //     -p location=eastus2 \
-//     -p voiceApiKey=<YOUR_KEY> \
-//     -p gitRepoUrl=https://github.com/405network/eon-dev-claude.git
+//     -p voiceApiKey=<YOUR_VOICE_API_KEY> \
+//     -p voiceEndpoint=https://your-openai.openai.azure.com \
+//     -p gitRepoUrl=https://github.com/your-org/eon-dev-claude.git
 
 targetScope = 'subscription'
 
@@ -51,18 +54,22 @@ param logAnalyticsName string = 'eon-logs-claude'
 @description('Image tag to deploy')
 param imageTag string = 'v1.0.0'
 
-@description('Azure OpenAI endpoint')
-param azureOpenAiEndpoint string = 'https://jarvis-voice-openai.openai.azure.com'
+@description('Azure OpenAI endpoint for voice (realtime API)')
+param voiceEndpoint string = 'https://jarvis-voice-openai.openai.azure.com'
 
-@description('Azure OpenAI deployment name')
-param azureOpenAiDeployment string = 'gpt-realtime'
+@description('Azure OpenAI deployment name for voice')
+param voiceModel string = 'gpt-realtime'
 
 @description('Voice name for TTS')
 param voiceName string = 'alloy'
 
 @secure()
-@description('Azure OpenAI API key')
+@description('Azure OpenAI API key for voice service')
 param voiceApiKey string = ''
+
+@secure()
+@description('Azure OpenAI API key for memory service (optional - uses auto-provisioned if not set)')
+param memoryApiKey string = ''
 
 @description('Git repository URL for source code (required)')
 param gitRepoUrl string
@@ -77,7 +84,7 @@ param gitBranch string = 'main'
 var tags = {
   project: project
   Creator: 'claude'
-  CreatedOn: '2026-01-24'
+  CreatedOn: '2026-01-25'
   environment: environment
 }
 
@@ -105,10 +112,11 @@ module resources 'claude-resources.bicep' = {
     containerAppEnvName: containerAppEnvName
     logAnalyticsName: logAnalyticsName
     imageTag: imageTag
-    azureOpenAiEndpoint: azureOpenAiEndpoint
-    azureOpenAiDeployment: azureOpenAiDeployment
+    voiceEndpoint: voiceEndpoint
+    voiceModel: voiceModel
     voiceName: voiceName
     voiceApiKey: voiceApiKey
+    memoryApiKey: memoryApiKey
     gitRepoUrl: gitRepoUrl
     gitBranch: gitBranch
     tags: tags
@@ -126,6 +134,9 @@ output containerAppEnvId string = resources.outputs.containerAppEnvId
 output containerAppEnvDefaultDomain string = resources.outputs.containerAppEnvDefaultDomain
 output eonApiClaudeFqdn string = resources.outputs.eonApiClaudeFqdn
 output eonVoiceClaudeFqdn string = resources.outputs.eonVoiceClaudeFqdn
+output eonMemoryClaudeFqdn string = resources.outputs.eonMemoryClaudeFqdn
 output staticWebAppUrl string = resources.outputs.staticWebAppUrl
 output staticWebAppName string = resources.outputs.staticWebAppName
 output deployFrontendCommand string = resources.outputs.deployFrontendCommand
+output openAiEndpoint string = resources.outputs.openAiEndpoint
+output storageAccountName string = resources.outputs.storageAccountName

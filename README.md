@@ -1,11 +1,15 @@
 # eon-dev-claude
 
-Voice-enabled AI assistant with swappable voice providers.
+Voice-enabled AI assistant with long-term memory and swappable voice providers.
 
 ## Architecture
 
 ```
-Frontend (SWA) → eon-api-claude (Container App) → eon-voice-claude (internal) → Azure OpenAI Realtime
+Frontend (SWA) → eon-api-claude → eon-voice-claude → Azure OpenAI Realtime
+                       ↓
+                eon-memory-claude → Redis (persistent storage)
+                       ↓
+                 Azure OpenAI (embeddings + chat)
 ```
 
 The Static Web App's linked backend proxies `/api/*` requests to the Container App.
@@ -13,32 +17,61 @@ The Static Web App's linked backend proxies `/api/*` requests to the Container A
 ## Prerequisites
 
 - Azure CLI installed and logged in (`az login`)
-- Azure OpenAI resource with `gpt-4o-mini-realtime-preview` deployment
+- Azure OpenAI resource with `gpt-4o-mini-realtime-preview` deployment (for voice)
 - Node.js 18+ (for SWA CLI)
 - Git
 
-## Deploy (4 Steps)
+## Deploy Options
 
-### Step 0: Clone the Repository
+### Option A: GitHub Actions (Recommended)
+
+1. **Fork this repository** to your GitHub account
+
+2. **Create Azure Service Principal**:
+   ```bash
+   az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
+     --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> --sdk-auth
+   ```
+   Copy the JSON output.
+
+3. **Configure GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+   | Secret Name | Description | Required |
+   |-------------|-------------|----------|
+   | `AZURE_CREDENTIALS` | JSON output from step 2 | Yes |
+   | `VOICE_ENDPOINT` | Azure OpenAI endpoint (e.g., `https://your-openai.openai.azure.com`) | Yes |
+   | `VOICE_API_KEY` | Azure OpenAI API key for voice | Yes |
+   | `MEMORY_API_KEY` | Azure OpenAI API key for memory (optional, auto-provisioned if not set) | No |
+
+4. **Run the workflow**:
+   - Go to Actions → "Deploy Eon Claude"
+   - Click "Run workflow"
+   - Select environment (dev/prod) and region
+   - Click "Run workflow"
+
+### Option B: Manual CLI Deploy
+
+#### Step 0: Clone the Repository
 
 ```bash
-git clone https://github.com/vyente-ruffin/eon-dev-claude.git
+git clone https://github.com/your-org/eon-dev-claude.git
 cd eon-dev-claude
 ```
 
-### Step 1: Deploy Infrastructure
+#### Step 1: Deploy Infrastructure
 
 ```bash
 az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
   -p resourceGroupName=rg-eon-claude \
   -p location=eastus2 \
-  -p gitRepoUrl=https://github.com/vyente-ruffin/eon-dev-claude.git \
-  -p voiceApiKey=<YOUR_AZURE_OPENAI_KEY>
+  -p voiceEndpoint=https://your-openai.openai.azure.com \
+  -p voiceApiKey=<YOUR_AZURE_OPENAI_KEY> \
+  -p gitRepoUrl=https://github.com/your-org/eon-dev-claude.git
 ```
 
 This creates all Azure resources and builds Docker images via ACR Tasks.
 
-### Step 2: Disable Auto-Enabled Auth
+#### Step 2: Disable Auto-Enabled Auth
 
 The linked backend auto-enables authentication on the Container App, which blocks WebSocket connections. Disable it:
 
@@ -46,7 +79,7 @@ The linked backend auto-enables authentication on the Container App, which block
 az containerapp auth update -n eon-api-claude -g rg-eon-claude --enabled false
 ```
 
-### Step 3: Deploy Frontend
+#### Step 3: Deploy Frontend
 
 ```bash
 npm install -g @azure/static-web-apps-cli
@@ -86,13 +119,33 @@ curl https://<YOUR_SWA_URL>/api/config
 
 | Resource | Purpose |
 |----------|---------|
+| Azure OpenAI | Embeddings + chat for memory service |
 | Azure Container Registry | Stores Docker images |
+| Storage Account | Persistent storage for Redis |
 | Log Analytics Workspace | Logging |
 | Container App Environment | Hosts containers |
+| redis-claude | Redis with RediSearch for vector storage |
+| eon-memory-claude | Long-term memory service |
+| eon-voice-claude | Voice service (internal) |
 | eon-api-claude | External API (WebSocket endpoint) |
-| eon-voice-claude | Internal voice service |
 | Static Web App | Frontend hosting with linked backend |
 | User Assigned Identity | ACR pull permissions |
+
+## Redis Data Backup & Restore
+
+The Redis data is persisted on an Azure File share and survives container restarts.
+
+### Backup
+
+```bash
+./scripts/redis-backup.sh rg-eon-claude ./backups
+```
+
+### Restore
+
+```bash
+./scripts/redis-restore.sh rg-eon-claude ./backups/redis-backup-20260125-143000.rdb
+```
 
 ## Available Regions
 
@@ -121,8 +174,27 @@ az cognitiveservices account keys list \
 - The SWA linked backend proxies `/api/*` to the Container App
 - If hitting the Container App directly, use `/health` (no `/api` prefix)
 
+### Memory not saving
+- Check eon-memory-claude logs: `az containerapp logs show -n eon-memory-claude -g rg-eon-claude --follow`
+- Verify Redis is running: `az containerapp logs show -n redis-claude -g rg-eon-claude --tail 20`
+
 ## Cleanup
 
 ```bash
 az group delete -n rg-eon-claude --yes
+```
+
+## Version History
+
+This repository uses Git for version control. To rollback to a previous version:
+
+```bash
+# View commit history
+git log --oneline
+
+# Checkout a previous version
+git checkout <commit-hash>
+
+# Redeploy from that version
+az deployment sub create -l eastus2 -f infra/claude.bicep ...
 ```
