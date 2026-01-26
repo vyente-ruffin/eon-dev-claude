@@ -2,6 +2,29 @@
 
 Voice-enabled AI assistant with long-term memory and swappable voice providers.
 
+## Deploy (One Command)
+
+GitHub Secrets are already configured. To deploy or restore this version:
+
+```bash
+cd eon-dev-claude
+gh workflow run deploy.yml -f environment=dev -f location=eastus2 -f image_tag=v1.0.0
+gh run watch
+```
+
+**Environments:**
+- `dev` → deploys to `rg-eon-dev-claude`
+- `prod` → deploys to `rg-eon-prod-claude`
+
+**Verify after deploy:**
+```bash
+URL=$(az staticwebapp list -g rg-eon-dev-claude --query "[0].defaultHostname" -o tsv)
+echo "https://$URL"
+curl https://$URL/api/health
+```
+
+---
+
 ## Architecture
 
 ```
@@ -12,69 +35,45 @@ Frontend (SWA) → eon-api-claude → eon-voice-claude → Azure OpenAI Realtime
                  Azure OpenAI (embeddings + chat)
 ```
 
-The Static Web App's linked backend proxies `/api/*` requests to the Container App.
+---
 
-## Prerequisites
+## First-Time Setup (Only If Secrets Not Configured)
 
-- Azure CLI installed and logged in (`az login`)
-- GitHub CLI installed and logged in (`gh auth login`)
-- Azure OpenAI resource with `gpt-4o-mini-realtime-preview` deployment (for voice)
-- **Azure OpenAI quota available** (minimum: 50K TPM for gpt-4o-mini, 10K TPM for text-embedding-3-small)
-- Node.js 18+ (for SWA CLI)
-- Git
+Skip this section if GitHub Secrets (`AZURE_CREDENTIALS`, `VOICE_ENDPOINT`, `VOICE_API_KEY`) are already set.
 
-## Deploy via GitHub Actions
+### Prerequisites
 
-This is the recommended deployment method. Follow these steps exactly.
+- Azure CLI: `az login`
+- GitHub CLI: `gh auth login`
+- Azure OpenAI quota: 50K TPM gpt-4o-mini, 10K TPM text-embedding-3-small
 
-### Step 1: Fork and Clone
+### Step 1: Create Service Principal
 
 ```bash
-git clone https://github.com/vyente-ruffin/eon-dev-claude.git
-cd eon-dev-claude
-```
-
-### Step 2: Create Azure Service Principal
-
-The service principal needs TWO roles: Contributor (to create resources) and User Access Administrator (to assign roles to managed identities).
-
-```bash
-# Set your subscription ID
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-# Create service principal with Contributor role and save credentials
 az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
   --scopes /subscriptions/$SUBSCRIPTION_ID --sdk-auth > sp-credentials.json
 
-# Get the service principal object ID
 SP_OBJECT_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
 
-# Add User Access Administrator role (required for role assignments in Bicep)
 az role assignment create --assignee $SP_OBJECT_ID \
   --role "User Access Administrator" \
   --scope /subscriptions/$SUBSCRIPTION_ID
 ```
 
-### Step 3: Set GitHub Secrets
+### Step 2: Set GitHub Secrets
 
 ```bash
-# Set the Azure credentials (from the JSON file created above)
 gh secret set AZURE_CREDENTIALS < sp-credentials.json
-
-# Set your Azure OpenAI endpoint (the one with gpt-4o-mini-realtime-preview)
-gh secret set VOICE_ENDPOINT -b "https://your-openai.openai.azure.com"
-
-# Set your Azure OpenAI API key
-gh secret set VOICE_API_KEY -b "your-api-key-here"
+gh secret set VOICE_ENDPOINT -b "https://jarvis-voice-openai.openai.azure.com"
+gh secret set VOICE_API_KEY -b "<your-api-key>"
 ```
 
-### Step 4: Run the Deployment
+### Step 3: Deploy
 
 ```bash
-# Deploy to dev environment in eastus2
 gh workflow run deploy.yml -f environment=dev -f location=eastus2 -f image_tag=v1.0.0
-
-# Watch the deployment progress
 gh run watch
 ```
 
