@@ -30,8 +30,7 @@ This is the recommended deployment method. Follow these steps exactly.
 ### Step 1: Fork and Clone
 
 ```bash
-# Fork via GitHub UI, then clone your fork
-git clone https://github.com/<YOUR_ORG>/eon-dev-claude.git
+git clone https://github.com/vyente-ruffin/eon-dev-claude.git
 cd eon-dev-claude
 ```
 
@@ -101,7 +100,7 @@ Use this if you prefer not to use GitHub Actions.
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/<YOUR_ORG>/eon-dev-claude.git
+git clone https://github.com/vyente-ruffin/eon-dev-claude.git
 cd eon-dev-claude
 ```
 
@@ -113,7 +112,7 @@ az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
   -p location=eastus2 \
   -p voiceEndpoint=https://your-openai.openai.azure.com \
   -p voiceApiKey=<YOUR_AZURE_OPENAI_KEY> \
-  -p gitRepoUrl=https://github.com/<YOUR_ORG>/eon-dev-claude.git
+  -p gitRepoUrl=https://github.com/vyente-ruffin/eon-dev-claude.git
 ```
 
 This creates all Azure resources and builds Docker images via ACR Tasks.
