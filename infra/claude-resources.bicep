@@ -93,7 +93,7 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   name: 'text-embedding-3-small'
   sku: {
     name: 'Standard'
-    capacity: 120
+    capacity: 100  // Reduced to avoid quota limits
   }
   properties: {
     model: {
@@ -110,7 +110,7 @@ resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-0
   name: 'gpt-4o-mini'
   sku: {
     name: 'Standard'
-    capacity: 120
+    capacity: 50  // Reduced to avoid quota limits
   }
   properties: {
     model: {
@@ -313,41 +313,6 @@ resource buildApiImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   ]
 }
 
-resource buildMemoryImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: 'build-eon-memory-claude'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    timeout: 'PT30M'
-    retentionInterval: 'P1D'
-    cleanupPreference: 'OnSuccess'
-    scriptContent: '''
-      az acr build \
-        --registry $ACR_NAME \
-        --image agent-memory-server:$IMAGE_TAG \
-        --file Dockerfile \
-        $GIT_REPO_URL#$GIT_BRANCH:services/eon-memory-claude
-    '''
-    environmentVariables: [
-      { name: 'ACR_NAME', value: acr.name }
-      { name: 'IMAGE_TAG', value: imageTag }
-      { name: 'GIT_REPO_URL', value: gitRepoUrl }
-      { name: 'GIT_BRANCH', value: gitBranch }
-    ]
-  }
-  dependsOn: [
-    deployIdentityRoleAssignment
-  ]
-}
-
 // ============================================================================
 // redis-claude (Internal - Redis with persistence)
 // ============================================================================
@@ -408,12 +373,6 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'eon-memory-claude'
   location: location
   tags: tags
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${acrPullIdentity.id}': {}
-    }
-  }
   properties: {
     managedEnvironmentId: containerAppEnv.id
     workloadProfileName: 'Consumption'
@@ -425,12 +384,6 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
-      registries: [
-        {
-          server: acr.properties.loginServer
-          identity: acrPullIdentity.id
-        }
-      ]
       secrets: [
         {
           name: 'memory-api-key'
@@ -442,7 +395,7 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'eon-memory-claude'
-          image: '${acr.properties.loginServer}/agent-memory-server:${imageTag}'
+          image: 'redislabs/agent-memory-server:latest'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -473,8 +426,6 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
     }
   }
   dependsOn: [
-    acrPullRoleAssignment
-    buildMemoryImage
     redisClaude
     chatDeployment
   ]
