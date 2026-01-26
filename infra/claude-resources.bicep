@@ -93,7 +93,7 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   name: 'text-embedding-3-small'
   sku: {
     name: 'Standard'
-    capacity: 100  // Reduced to avoid quota limits
+    capacity: 10  // Minimum to fit within quota
   }
   properties: {
     model: {
