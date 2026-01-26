@@ -6,10 +6,10 @@ Voice-enabled AI assistant with long-term memory and swappable voice providers.
 
 ```
 Frontend (SWA) → eon-api-claude → eon-voice-claude → Azure OpenAI Realtime
-                       ↓
-                eon-memory-claude → Redis (persistent storage)
-                       ↓
-                 Azure OpenAI (embeddings + chat)
+                      ↓
+               eon-memory-claude → Redis (persistent storage)
+                      ↓
+                Azure OpenAI (embeddings + chat)
 ```
 
 The Static Web App's linked backend proxies `/api/*` requests to the Container App.
@@ -18,27 +18,65 @@ The Static Web App's linked backend proxies `/api/*` requests to the Container A
 
 - Azure CLI installed and logged in (`az login`)
 - Azure OpenAI resource with `gpt-4o-mini-realtime-preview` deployment (for voice)
+- GitHub CLI (`gh`) for automated secret configuration
 - Node.js 18+ (for SWA CLI)
 - Git
+
+### Azure OpenAI Quota Requirements
+
+The deployment creates an Azure OpenAI resource that requires:
+- **gpt-4o-mini**: ~10 TPM (Tokens Per Minute) minimum
+- **text-embedding-3-small**: ~10 TPM minimum
+
+Check your quota: `az cognitiveservices usage list -l eastus2 -o table`
+
+## Quick Start (Automated)
+
+The setup script handles service principal creation, role assignments, quota checks, and GitHub secrets:
+
+```bash
+# Clone the repo
+git clone https://github.com/your-org/eon-dev-claude.git
+cd eon-dev-claude
+
+# Run automated setup (replace with your subscription ID and GitHub repo)
+./scripts/setup-azure.sh <SUBSCRIPTION_ID> owner/eon-dev-claude
+
+# Then run the GitHub Actions workflow
+# Actions → "Deploy Eon Claude" → Run workflow
+```
+
+The script will:
+1. Check and purge soft-deleted OpenAI resources (which hold quota)
+2. Verify available Azure OpenAI quota
+3. Create service principal with correct roles (Contributor + User Access Administrator)
+4. Configure GitHub secrets automatically
 
 ## Deploy Options
 
 ### Option A: GitHub Actions (Recommended)
 
-1. **Fork this repository** to your GitHub account
+1. **Run the setup script** (see Quick Start above), OR manually:
 
-2. **Create Azure Service Principal**:
+2. **Create Azure Service Principal with correct roles**:
    ```bash
+   # Create SP with Contributor role
    az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
-     --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> --sdk-auth
+     --scopes /subscriptions/<YOUR_SUBSCRIPTION_ID> --sdk-auth > azure-creds.json
+
+   # Add User Access Administrator role (required for role assignments)
+   SP_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
+   az role assignment create --assignee-object-id "$SP_ID" \
+     --assignee-principal-type ServicePrincipal \
+     --role "User Access Administrator" \
+     --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
    ```
-   Copy the JSON output.
 
 3. **Configure GitHub Secrets** (Settings → Secrets and variables → Actions):
 
    | Secret Name | Description | Required |
    |-------------|-------------|----------|
-   | `AZURE_CREDENTIALS` | JSON output from step 2 | Yes |
+   | `AZURE_CREDENTIALS` | JSON from azure-creds.json | Yes |
    | `VOICE_ENDPOINT` | Azure OpenAI endpoint (e.g., `https://your-openai.openai.azure.com`) | Yes |
    | `VOICE_API_KEY` | Azure OpenAI API key for voice | Yes |
    | `MEMORY_API_KEY` | Azure OpenAI API key for memory (optional, auto-provisioned if not set) | No |
@@ -162,19 +200,51 @@ az cognitiveservices account keys list \
 
 ## Troubleshooting
 
+### Deployment fails with "InsufficientQuota"
+
+Azure OpenAI has subscription-wide quota limits. To fix:
+
+```bash
+# Check current quota usage
+az cognitiveservices usage list -l eastus2 -o table | grep -i "gpt-4o-mini\|embedding"
+
+# List and purge soft-deleted resources (they hold quota for 48 hours)
+az cognitiveservices account list-deleted -o table
+az cognitiveservices account purge -l eastus2 -n <resource-name>
+```
+
+To request quota increase: Azure Portal → Azure OpenAI → Quotas → Request increase
+
+### Deployment fails with "Authorization failed for roleAssignments"
+
+The service principal needs User Access Administrator role:
+
+```bash
+SP_ID=$(az ad sp list --display-name "eon-deploy-sp" --query "[0].id" -o tsv)
+az role assignment create --assignee-object-id "$SP_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "User Access Administrator" \
+  --scope /subscriptions/<YOUR_SUBSCRIPTION_ID>
+```
+
 ### "Offline" status in browser
-- Check that Step 2 was completed (auth disabled)
+
+- Check that auth is disabled: `az containerapp auth show -n eon-api-claude -g rg-eon-claude`
+- Disable if needed: `az containerapp auth update -n eon-api-claude -g rg-eon-claude --enabled false`
 - Check container logs: `az containerapp logs show -n eon-api-claude -g rg-eon-claude --follow`
 
 ### WebSocket connection fails
+
 - Ensure auth is disabled on the Container App
 - Check that the Container App is running with at least 1 replica
 
 ### 404 on /api/health
+
 - The SWA linked backend proxies `/api/*` to the Container App
 - If hitting the Container App directly, use `/health` (no `/api` prefix)
 
 ### Memory not saving
+
 - Check eon-memory-claude logs: `az containerapp logs show -n eon-memory-claude -g rg-eon-claude --follow`
 - Verify Redis is running: `az containerapp logs show -n redis-claude -g rg-eon-claude --tail 20`
 
