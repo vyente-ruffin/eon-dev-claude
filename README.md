@@ -273,17 +273,45 @@ az role assignment create --assignee $SP_OBJECT_ID \
 az group delete -n rg-eon-claude --yes
 ```
 
-## Version History
+## Capture & Restore
 
-This repository uses Git for version control. To rollback to a previous version:
+### Capture Current State
+
+After making changes to Azure that you want to keep:
 
 ```bash
-# View commit history
-git log --oneline
+# 1. Verify bicep matches Azure (no destructive changes)
+az deployment sub what-if --location eastus2 --template-file infra/claude.bicep \
+  --parameters resourceGroupName=rg-eon-dev-claude \
+  --parameters voiceApiKey="placeholder"
 
-# Checkout a previous version
-git checkout <commit-hash>
+# 2. If differences exist, update bicep files to match Azure
 
-# Redeploy from that version
-az deployment sub create -l eastus2 -f infra/claude.bicep ...
+# 3. Commit and tag
+git add -A
+git commit -m "capture: description of changes"
+git tag v1.0.x
+git push origin main --tags
 ```
+
+### Restore Previous State
+
+```bash
+# View available versions
+git tag
+
+# Checkout and deploy
+git checkout v1.0.1
+gh workflow run deploy.yml -f environment=dev -f location=eastus2
+gh run watch
+```
+
+### What Gets Captured
+
+| Item | Location | Captured in Git? |
+|------|----------|------------------|
+| Infrastructure | Bicep files | Yes |
+| Container image tags | Bicep params | Yes |
+| Container images | ACR | No (already in registry) |
+| Secrets | GitHub Secrets | No (persist separately) |
+| Redis data | Azure File Share | No (persists in Azure) |
