@@ -18,11 +18,9 @@
 //
 // Or with inline params:
 //   az deployment sub create -l eastus2 -n eon-deploy -f infra/claude.bicep \
-//     -p resourceGroupName=rg-eon-claude \
+//     -p resourceGroupName=rg-eon-dev-claude \
 //     -p location=eastus2 \
-//     -p voiceApiKey=<YOUR_VOICE_API_KEY> \
-//     -p voiceEndpoint=https://your-openai.openai.azure.com \
-//     -p gitRepoUrl=https://github.com/your-org/eon-dev-claude.git
+//     -p voiceApiKey=<YOUR_VOICE_API_KEY>
 
 targetScope = 'subscription'
 
@@ -43,7 +41,7 @@ param project string = 'eon-claude'
 param environment string = 'dev'
 
 @description('Azure Container Registry name (must be globally unique)')
-param acrName string = 'eonacr${uniqueString(subscription().subscriptionId, resourceGroupName)}'
+param acrName string = 'eonacrpa75j7hhoqfms'
 
 @description('Container App Environment name')
 param containerAppEnvName string = 'eon-env-claude'
@@ -51,11 +49,14 @@ param containerAppEnvName string = 'eon-env-claude'
 @description('Log Analytics Workspace name')
 param logAnalyticsName string = 'eon-logs-claude'
 
-@description('Image tag to deploy')
-param imageTag string = 'v1.0.0'
+@description('API image tag to deploy')
+param apiImageTag string = 'v6'
+
+@description('Voice image tag to deploy')
+param voiceImageTag string = 'v1.0.0'
 
 @description('Azure OpenAI endpoint for voice (realtime API)')
-param voiceEndpoint string = 'https://jarvis-voice-openai.openai.azure.com'
+param voiceEndpoint string = 'https://eastus2.api.cognitive.microsoft.com'
 
 @description('Azure OpenAI deployment name for voice')
 param voiceModel string = 'gpt-realtime'
@@ -70,12 +71,6 @@ param voiceApiKey string = ''
 @secure()
 @description('Azure OpenAI API key for memory service (optional - uses auto-provisioned if not set)')
 param memoryApiKey string = ''
-
-@description('Git repository URL for source code (required)')
-param gitRepoUrl string
-
-@description('Git branch to build from')
-param gitBranch string = 'main'
 
 // ============================================================================
 // Variables
@@ -111,14 +106,13 @@ module resources 'claude-resources.bicep' = {
     acrName: acrName
     containerAppEnvName: containerAppEnvName
     logAnalyticsName: logAnalyticsName
-    imageTag: imageTag
+    apiImageTag: apiImageTag
+    voiceImageTag: voiceImageTag
     voiceEndpoint: voiceEndpoint
     voiceModel: voiceModel
     voiceName: voiceName
     voiceApiKey: voiceApiKey
     memoryApiKey: memoryApiKey
-    gitRepoUrl: gitRepoUrl
-    gitBranch: gitBranch
     tags: tags
   }
 }

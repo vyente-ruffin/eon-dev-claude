@@ -19,7 +19,10 @@ param environment string
 param acrName string
 param containerAppEnvName string
 param logAnalyticsName string
-param imageTag string
+
+// Image tags (images are pre-built in ACR)
+param apiImageTag string = 'v6'
+param voiceImageTag string = 'v1.0.0'
 
 // Voice service config (uses external Azure OpenAI for realtime)
 param voiceEndpoint string
@@ -33,15 +36,13 @@ param voiceApiKey string
 @secure()
 param memoryApiKey string
 
-param gitRepoUrl string
-param gitBranch string
 param tags object
 
 // ============================================================================
 // Storage Account (for Redis persistence)
 // ============================================================================
 
-var storageAccountName = 'eonstorage${uniqueString(resourceGroup().id)}'
+var storageAccountName = 'eonstorageclaude'
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -75,7 +76,7 @@ resource redisFileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2
 // ============================================================================
 
 resource openAi 'Microsoft.CognitiveServices/accounts@2024-04-01-preview' = {
-  name: 'eon-openai-${environment}'
+  name: 'eon-openai-claude'
   location: location
   tags: tags
   kind: 'OpenAI'
@@ -93,7 +94,7 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   name: 'text-embedding-3-small'
   sku: {
     name: 'Standard'
-    capacity: 10  // Minimum to fit within quota
+    capacity: 120
   }
   properties: {
     model: {
@@ -110,7 +111,7 @@ resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-0
   name: 'gpt-4o-mini'
   sku: {
     name: 'Standard'
-    capacity: 50  // Reduced to avoid quota limits
+    capacity: 120
   }
   properties: {
     model: {
@@ -122,6 +123,26 @@ resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-0
   }
   dependsOn: [
     embeddingDeployment
+  ]
+}
+
+resource realtimeDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-04-01-preview' = {
+  parent: openAi
+  name: 'gpt-realtime'
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 1
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-4o-mini-realtime-preview'
+      version: '2024-12-17'
+    }
+    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
+  }
+  dependsOn: [
+    chatDeployment
   ]
 }
 
@@ -219,101 +240,6 @@ resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-
 }
 
 // ============================================================================
-// User Assigned Managed Identity (for deployment scripts)
-// ============================================================================
-
-resource deploymentIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-eon-deploy-${environment}'
-  location: location
-  tags: tags
-}
-
-var contributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
-
-resource deployIdentityRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, 'id-eon-deploy-${environment}', contributorRoleId)
-  properties: {
-    principalId: deploymentIdentity.properties.principalId
-    roleDefinitionId: contributorRoleId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// ============================================================================
-// Deployment Scripts - Build Docker Images via ACR Tasks
-// ============================================================================
-
-resource buildVoiceImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: 'build-eon-voice-claude'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    timeout: 'PT30M'
-    retentionInterval: 'P1D'
-    cleanupPreference: 'OnSuccess'
-    scriptContent: '''
-      az acr build \
-        --registry $ACR_NAME \
-        --image eon-voice-claude:$IMAGE_TAG \
-        --file Dockerfile \
-        $GIT_REPO_URL#$GIT_BRANCH:services/eon-voice-claude
-    '''
-    environmentVariables: [
-      { name: 'ACR_NAME', value: acr.name }
-      { name: 'IMAGE_TAG', value: imageTag }
-      { name: 'GIT_REPO_URL', value: gitRepoUrl }
-      { name: 'GIT_BRANCH', value: gitBranch }
-    ]
-  }
-  dependsOn: [
-    deployIdentityRoleAssignment
-  ]
-}
-
-resource buildApiImage 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: 'build-eon-api-claude'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.52.0'
-    timeout: 'PT30M'
-    retentionInterval: 'P1D'
-    cleanupPreference: 'OnSuccess'
-    scriptContent: '''
-      az acr build \
-        --registry $ACR_NAME \
-        --image eon-api-claude:$IMAGE_TAG \
-        --file Dockerfile \
-        $GIT_REPO_URL#$GIT_BRANCH:backend
-    '''
-    environmentVariables: [
-      { name: 'ACR_NAME', value: acr.name }
-      { name: 'IMAGE_TAG', value: imageTag }
-      { name: 'GIT_REPO_URL', value: gitRepoUrl }
-      { name: 'GIT_BRANCH', value: gitBranch }
-    ]
-  }
-  dependsOn: [
-    deployIdentityRoleAssignment
-  ]
-}
-
-// ============================================================================
 // redis-claude (Internal - Redis with persistence)
 // ============================================================================
 
@@ -373,6 +299,12 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'eon-memory-claude'
   location: location
   tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${acrPullIdentity.id}': {}
+    }
+  }
   properties: {
     managedEnvironmentId: containerAppEnv.id
     workloadProfileName: 'Consumption'
@@ -384,6 +316,12 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
         transport: 'auto'
         allowInsecure: false
       }
+      registries: [
+        {
+          server: acr.properties.loginServer
+          identity: acrPullIdentity.id
+        }
+      ]
       secrets: [
         {
           name: 'memory-api-key'
@@ -395,7 +333,9 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'eon-memory-claude'
-          image: 'redislabs/agent-memory-server:latest'
+          image: '${acr.properties.loginServer}/agent-memory-server:latest'
+          command: ['agent-memory']
+          args: ['api', '--host', '0.0.0.0', '--port', '8000', '--task-backend=asyncio']
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -428,6 +368,7 @@ resource eonMemoryClaude 'Microsoft.App/containerApps@2024-03-01' = {
   dependsOn: [
     redisClaude
     chatDeployment
+    acrPullRoleAssignment
   ]
 }
 
@@ -473,7 +414,7 @@ resource eonVoiceClaude 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'eon-voice-claude'
-          image: '${acr.properties.loginServer}/eon-voice-claude:${imageTag}'
+          image: '${acr.properties.loginServer}/eon-voice-claude:${voiceImageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -494,7 +435,6 @@ resource eonVoiceClaude 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     acrPullRoleAssignment
-    buildVoiceImage
   ]
 }
 
@@ -534,7 +474,7 @@ resource eonApiClaude 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'eon-api-claude'
-          image: '${acr.properties.loginServer}/eon-api-claude:${imageTag}'
+          image: '${acr.properties.loginServer}/eon-api-claude:${apiImageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -553,7 +493,6 @@ resource eonApiClaude 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     acrPullRoleAssignment
-    buildApiImage
     eonVoiceClaude
     eonMemoryClaude
   ]
@@ -564,12 +503,12 @@ resource eonApiClaude 'Microsoft.App/containerApps@2024-03-01' = {
 // ============================================================================
 
 resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
-  name: 'swa-eon-claude-${environment}'
+  name: 'eon-web-claude'
   location: location
   tags: tags
   sku: {
-    name: 'Standard'
-    tier: 'Standard'
+    name: 'Free'
+    tier: 'Free'
   }
   properties: {
     stagingEnvironmentPolicy: 'Enabled'

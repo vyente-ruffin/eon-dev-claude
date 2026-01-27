@@ -21,6 +21,8 @@
 name: Deploy Eon Claude
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -42,15 +44,9 @@ on:
           - westus2
           - westeurope
           - eastasia
-      image_tag:
-        description: 'Image tag to deploy'
-        required: true
-        default: 'v1.0.0'
-
 env:
   DEPLOY_ENV: ${{ github.event.inputs.environment || 'dev' }}
   DEPLOY_LOCATION: ${{ github.event.inputs.location || 'eastus2' }}
-  DEPLOY_TAG: ${{ github.event.inputs.image_tag || 'v1.0.0' }}
 
 jobs:
   deploy:
@@ -72,11 +68,8 @@ jobs:
       - name: Deploy Infrastructure
         id: deploy
         env:
-          VOICE_ENDPOINT: ${{ secrets.VOICE_ENDPOINT }}
           VOICE_API_KEY: ${{ secrets.VOICE_API_KEY }}
           MEMORY_API_KEY: ${{ secrets.MEMORY_API_KEY }}
-          GIT_REPO: ${{ github.server_url }}/${{ github.repository }}.git
-          GIT_BRANCH: ${{ github.ref_name }}
         run: |
           echo "Deploying to $RESOURCE_GROUP in ${{ env.DEPLOY_LOCATION }}"
 
@@ -87,12 +80,8 @@ jobs:
             --parameters resourceGroupName="$RESOURCE_GROUP" \
             --parameters location="${{ env.DEPLOY_LOCATION }}" \
             --parameters environment="${{ env.DEPLOY_ENV }}" \
-            --parameters imageTag="${{ env.DEPLOY_TAG }}" \
-            --parameters voiceEndpoint="$VOICE_ENDPOINT" \
             --parameters voiceApiKey="$VOICE_API_KEY" \
-            --parameters memoryApiKey="${MEMORY_API_KEY:-}" \
-            --parameters gitRepoUrl="$GIT_REPO" \
-            --parameters gitBranch="$GIT_BRANCH"
+            --parameters memoryApiKey="${MEMORY_API_KEY:-}"
 
           # Get outputs
           STATIC_WEB_APP_NAME=$(az deployment sub show -n "eon-deploy-${{ github.run_number }}" --query 'properties.outputs.staticWebAppName.value' -o tsv)
