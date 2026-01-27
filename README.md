@@ -283,12 +283,13 @@ After making changes to Azure that you want to keep:
 ./scripts/capture-state.sh v1.0.2 "capture: description of changes"
 ```
 
-This script:
-1. Queries Azure for current image tags
-2. Updates bicep files to match
-3. Runs what-if to verify
-4. Commits and tags
-5. Pushes to GitHub
+This script captures:
+- Container image tags (api, voice)
+- Scaling settings (min/max replicas)
+- Voice config (endpoint, model, voice name)
+- OpenAI capacities (embedding, chat, realtime)
+
+Then commits to git and pushes.
 
 ### Restore Previous State
 
@@ -304,10 +305,13 @@ gh run watch
 
 ### What Gets Captured
 
-| Item | Location | Captured in Git? |
-|------|----------|------------------|
-| Infrastructure | Bicep files | Yes |
-| Container image tags | Bicep params | Yes |
-| Container images | ACR | No (already in registry) |
-| Secrets | GitHub Secrets | No (persist separately) |
-| Redis data | Azure File Share | No (persists in Azure) |
+| Item | Captured? |
+|------|-----------|
+| Container image tags | Yes |
+| Scaling (min/max replicas) | Yes |
+| Voice config (endpoint, model, name) | Yes |
+| OpenAI capacities | Yes |
+| Infrastructure (all resources) | Yes |
+| Container images | No (already in ACR) |
+| Secrets (API keys) | No (in GitHub Secrets) |
+| Redis data | No (persists in Azure) |
