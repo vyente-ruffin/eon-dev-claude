@@ -8,7 +8,7 @@ GitHub Secrets are already configured. To deploy or restore this version:
 
 ```bash
 cd eon-dev-claude
-gh workflow run deploy.yml -f environment=dev -f location=eastus2 -f image_tag=v1.0.0
+gh workflow run deploy.yml -f environment=dev -f location=eastus2
 gh run watch
 ```
 
