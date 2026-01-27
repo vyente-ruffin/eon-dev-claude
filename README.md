@@ -275,24 +275,20 @@ az group delete -n rg-eon-claude --yes
 
 ## Capture & Restore
 
-### Capture Current State
+### Capture Current State (One Command)
 
 After making changes to Azure that you want to keep:
 
 ```bash
-# 1. Verify bicep matches Azure (no destructive changes)
-az deployment sub what-if --location eastus2 --template-file infra/claude.bicep \
-  --parameters resourceGroupName=rg-eon-dev-claude \
-  --parameters voiceApiKey="placeholder"
-
-# 2. If differences exist, update bicep files to match Azure
-
-# 3. Commit and tag
-git add -A
-git commit -m "capture: description of changes"
-git tag v1.0.x
-git push origin main --tags
+./scripts/capture-state.sh v1.0.2 "capture: description of changes"
 ```
+
+This script:
+1. Queries Azure for current image tags
+2. Updates bicep files to match
+3. Runs what-if to verify
+4. Commits and tags
+5. Pushes to GitHub
 
 ### Restore Previous State
 
