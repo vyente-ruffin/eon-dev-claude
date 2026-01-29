@@ -32,8 +32,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      api_tag: ${{ steps.tags.outputs.api_tag }}
-      voice_tag: ${{ steps.tags.outputs.voice_tag }}
+      image_tag: ${{ steps.tags.outputs.image_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,18 +49,17 @@ jobs:
         id: tags
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          echo "api_tag=eon-api-dev:${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "voice_tag=eon-voice-dev:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "image_tag=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
       - name: Build and push API image
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.api_tag }} -f backend/Dockerfile backend/
-          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.api_tag }}
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/eon-api-dev:${{ steps.tags.outputs.image_tag }} -f backend/Dockerfile backend/
+          docker push ${{ env.ACR_NAME }}.azurecr.io/eon-api-dev:${{ steps.tags.outputs.image_tag }}
 
       - name: Build and push Voice image
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.voice_tag }} -f services/eon-voice-claude/Dockerfile services/eon-voice-claude/
-          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.voice_tag }}
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/eon-voice-dev:${{ steps.tags.outputs.image_tag }} -f services/eon-voice-claude/Dockerfile services/eon-voice-claude/
+          docker push ${{ env.ACR_NAME }}.azurecr.io/eon-voice-dev:${{ steps.tags.outputs.image_tag }}
 
   deploy:
     needs: build
@@ -80,12 +78,13 @@ jobs:
         run: |
           az deployment group create \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --template-file infra/claude.bicep \
+            --template-file infra/main.bicep \
             --parameters environment=dev \
-            --parameters location=${{ env.LOCATION }} \
+            --parameters acrServer=${{ env.ACR_NAME }}.azurecr.io \
+            --parameters apiImageTag="${{ needs.build.outputs.image_tag }}" \
+            --parameters voiceImageTag="${{ needs.build.outputs.image_tag }}" \
             --parameters voiceApiKey="${{ secrets.VOICE_API_KEY }}" \
-            --parameters apiImageTag="${{ needs.build.outputs.api_tag }}" \
-            --parameters voiceImageTag="${{ needs.build.outputs.voice_tag }}" \
+            --parameters memoryApiKey="${{ secrets.MEMORY_API_KEY }}" \
             --mode Incremental
 
       - name: Ensure ACR registry config
@@ -106,14 +105,14 @@ jobs:
           az containerapp update \
             -n eon-api-dev \
             -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ needs.build.outputs.api_tag }}
+            --image ${{ env.ACR_NAME }}.azurecr.io/eon-api-dev:${{ needs.build.outputs.image_tag }}
 
       - name: Update Voice Container App
         run: |
           az containerapp update \
             -n eon-voice-dev \
             -g ${{ env.RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/${{ needs.build.outputs.voice_tag }}
+            --image ${{ env.ACR_NAME }}.azurecr.io/eon-voice-dev:${{ needs.build.outputs.image_tag }}
 
       - name: Verify deployment
         run: |
