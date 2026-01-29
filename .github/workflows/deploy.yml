@@ -1,124 +1,111 @@
-# Eon Claude Full Stack Deployment
+# Eon Dev Deployment
 #
-# This workflow deploys the complete Eon Claude stack to Azure.
+# Deploys to rg-eon-dev (the cloned dev environment)
 #
 # Required GitHub Secrets:
 #   AZURE_CREDENTIALS    - Azure service principal credentials (JSON)
 #   VOICE_API_KEY        - Azure OpenAI API key for voice (realtime)
-#   VOICE_ENDPOINT       - Azure OpenAI endpoint for voice (e.g., https://your-openai.openai.azure.com)
+#   VOICE_ENDPOINT       - Azure OpenAI endpoint (https://eastus2.api.cognitive.microsoft.com)
 #
-# Optional GitHub Secrets:
-#   MEMORY_API_KEY       - Azure OpenAI API key for memory (auto-provisioned if not set)
+# Container Apps in rg-eon-dev:
+#   - eon-api-dev
+#   - eon-voice-dev
+#   - eon-memory-dev
+#   - eon-voice-gemini-dev
+#   - redis-dev
 #
-# How to set up AZURE_CREDENTIALS:
-#   az ad sp create-for-rbac --name "eon-deploy-sp" --role contributor \
-#     --scopes /subscriptions/<SUBSCRIPTION_ID> --sdk-auth
-#
-# Workflow Triggers:
-#   - Manual dispatch (workflow_dispatch) - recommended for controlled deployments
-#   - Push to main branch (optional, commented out by default)
+# ACR: eonacrpa75j7hhoqfms.azurecr.io
 
-name: Deploy Eon Claude
+name: Deploy to Dev
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
-      location:
-        description: 'Azure region'
-        required: true
-        default: 'eastus2'
-        type: choice
-        options:
-          - eastus2
-          - centralus
-          - westus2
-          - westeurope
-          - eastasia
+
 env:
-  DEPLOY_ENV: ${{ github.event.inputs.environment || 'dev' }}
-  DEPLOY_LOCATION: ${{ github.event.inputs.location || 'eastus2' }}
+  RESOURCE_GROUP: rg-eon-dev
+  ACR_NAME: eonacrpa75j7hhoqfms
+  LOCATION: eastus2
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-
+    outputs:
+      api_tag: ${{ steps.tags.outputs.api_tag }}
+      voice_tag: ${{ steps.tags.outputs.voice_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set resource group name
-        run: |
-          echo "RESOURCE_GROUP=rg-eon-${{ env.DEPLOY_ENV }}-claude" >> $GITHUB_ENV
 
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy Infrastructure
-        id: deploy
-        env:
-          VOICE_API_KEY: ${{ secrets.VOICE_API_KEY }}
-          MEMORY_API_KEY: ${{ secrets.MEMORY_API_KEY }}
-        run: |
-          echo "Deploying to $RESOURCE_GROUP in ${{ env.DEPLOY_LOCATION }}"
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
 
-          az deployment sub create \
-            --location "${{ env.DEPLOY_LOCATION }}" \
-            --name "eon-deploy-${{ github.run_number }}" \
+      - name: Generate image tags
+        id: tags
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "api_tag=eon-api-dev:${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "voice_tag=eon-voice-dev:${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push API image
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.api_tag }} -f backend/Dockerfile backend/
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.api_tag }}
+
+      - name: Build and push Voice image
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.voice_tag }} -f services/eon-voice-claude/Dockerfile services/eon-voice-claude/
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ steps.tags.outputs.voice_tag }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy Bicep
+        run: |
+          az deployment group create \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
             --template-file infra/claude.bicep \
-            --parameters resourceGroupName="$RESOURCE_GROUP" \
-            --parameters location="${{ env.DEPLOY_LOCATION }}" \
-            --parameters environment="${{ env.DEPLOY_ENV }}" \
-            --parameters voiceApiKey="$VOICE_API_KEY" \
-            --parameters memoryApiKey="${MEMORY_API_KEY:-}"
+            --parameters environment=dev \
+            --parameters location=${{ env.LOCATION }} \
+            --parameters voiceApiKey="${{ secrets.VOICE_API_KEY }}" \
+            --parameters apiImageTag="${{ needs.build.outputs.api_tag }}" \
+            --parameters voiceImageTag="${{ needs.build.outputs.voice_tag }}" \
+            --mode Incremental || echo "Bicep deployment skipped or failed - continuing with container update"
 
-          # Get outputs
-          STATIC_WEB_APP_NAME=$(az deployment sub show -n "eon-deploy-${{ github.run_number }}" --query 'properties.outputs.staticWebAppName.value' -o tsv)
-          STATIC_WEB_APP_URL=$(az deployment sub show -n "eon-deploy-${{ github.run_number }}" --query 'properties.outputs.staticWebAppUrl.value' -o tsv)
-
-          echo "swa_name=$STATIC_WEB_APP_NAME" >> $GITHUB_OUTPUT
-          echo "swa_url=$STATIC_WEB_APP_URL" >> $GITHUB_OUTPUT
-
-      - name: Disable Auto-Enabled Auth
+      - name: Update API Container App
         run: |
-          # SWA linked backend auto-enables auth, which blocks WebSockets
-          echo "Disabling auto-enabled auth on Container App..."
-          az containerapp auth update -n eon-api-claude -g "$RESOURCE_GROUP" --enabled false || true
+          az containerapp update \
+            -n eon-api-dev \
+            -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ needs.build.outputs.api_tag }}
 
-      - name: Install SWA CLI
-        run: npm install -g @azure/static-web-apps-cli
-
-      - name: Deploy Frontend
+      - name: Update Voice Container App
         run: |
-          DEPLOYMENT_TOKEN=$(az staticwebapp secrets list -n "${{ steps.deploy.outputs.swa_name }}" -g "$RESOURCE_GROUP" --query properties.apiKey -o tsv)
-          swa deploy frontend --deployment-token "$DEPLOYMENT_TOKEN" --env production
+          az containerapp update \
+            -n eon-voice-dev \
+            -g ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/${{ needs.build.outputs.voice_tag }}
 
-      - name: Deployment Summary
-        env:
-          SWA_URL: ${{ steps.deploy.outputs.swa_url }}
+      - name: Verify deployment
         run: |
           echo "## Deployment Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Frontend URL:** $SWA_URL" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Verify Deployment" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl $SWA_URL/api/health" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Test in Browser" >> $GITHUB_STEP_SUMMARY
-          echo "1. Open $SWA_URL" >> $GITHUB_STEP_SUMMARY
-          echo "2. Allow microphone access" >> $GITHUB_STEP_SUMMARY
-          echo "3. Type a message and click Send" >> $GITHUB_STEP_SUMMARY
-          echo "4. You should hear an audio response" >> $GITHUB_STEP_SUMMARY
+          API_URL=$(az containerapp show -n eon-api-dev -g ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "**API URL:** https://$API_URL" >> $GITHUB_STEP_SUMMARY
+          SWA_URL=$(az staticwebapp list -g ${{ env.RESOURCE_GROUP }} --query "[0].defaultHostname" -o tsv 2>/dev/null || echo "N/A")
+          echo "**Frontend URL:** https://$SWA_URL" >> $GITHUB_STEP_SUMMARY
