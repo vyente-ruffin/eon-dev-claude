@@ -76,6 +76,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy Bicep
+        continue-on-error: true
         run: |
           az deployment group create \
             --resource-group ${{ env.RESOURCE_GROUP }} \
@@ -85,7 +86,20 @@ jobs:
             --parameters voiceApiKey="${{ secrets.VOICE_API_KEY }}" \
             --parameters apiImageTag="${{ needs.build.outputs.api_tag }}" \
             --parameters voiceImageTag="${{ needs.build.outputs.voice_tag }}" \
-            --mode Incremental || echo "Bicep deployment skipped or failed - continuing with container update"
+            --mode Incremental
+
+      - name: Ensure ACR registry config
+        run: |
+          # Get managed identity ID
+          IDENTITY_ID=$(az identity show -n id-eon-acr-dev -g ${{ env.RESOURCE_GROUP }} --query id -o tsv)
+          
+          # Add registry config to container apps (idempotent)
+          for APP in eon-api-dev eon-voice-dev; do
+            echo "Setting registry for $APP..."
+            az containerapp registry set -n $APP -g ${{ env.RESOURCE_GROUP }} \
+              --server ${{ env.ACR_NAME }}.azurecr.io \
+              --identity "$IDENTITY_ID" || true
+          done
 
       - name: Update API Container App
         run: |
