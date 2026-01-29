@@ -1,16 +1,16 @@
-// EON Dev Infrastructure
+// EON Infrastructure
 // 
-// This is the source of truth for rg-eon-dev.
+// This is the source of truth for EON environments.
 // All infrastructure changes should be made here and deployed via CI/CD.
 //
 // Usage:
-//   az deployment group create -g rg-eon-dev -f infra/main.bicep -p voiceApiKey=<key>
+//   az deployment group create -g rg-eon-dev -f infra/main.bicep -p environment=dev
 
 // ============================================================================
 // Parameters
 // ============================================================================
 
-@description('Environment name')
+@description('Environment name (dev, staging, prod)')
 param environment string = 'dev'
 
 @description('Location for all resources')
@@ -25,13 +25,11 @@ param apiImageTag string = 'latest'
 @description('Voice container image tag')
 param voiceImageTag string = 'latest'
 
-@secure()
-@description('Azure OpenAI API key for voice service')
-param voiceApiKey string
+@description('Key Vault name for secrets')
+param keyVaultName string = 'kv-infra-405'
 
-@secure()
-@description('Azure OpenAI API key for memory service')
-param memoryApiKey string = ''
+@description('Key Vault resource group')
+param keyVaultResourceGroup string = 'rg-infra'
 
 // ============================================================================
 // Variables
@@ -39,9 +37,8 @@ param memoryApiKey string = ''
 
 var suffix = environment
 var envName = 'eon-env-${suffix}'
-var logAnalyticsName = 'eon-logs-${suffix}'
-var storageName = 'eonstorage${suffix}'
 var identityName = 'id-eon-acr-${suffix}'
+var keyVaultUri = 'https://${keyVaultName}.vault.azure.net'
 
 var tags = {
   project: 'eon'
@@ -149,7 +146,8 @@ resource voiceApp 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: [
         {
           name: 'voice-api-key'
-          value: voiceApiKey
+          keyVaultUrl: '${keyVaultUri}/secrets/eon-voice-api-key-${suffix}'
+          identity: managedIdentity.id
         }
       ]
     }
@@ -218,7 +216,8 @@ resource memoryApp 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: [
         {
           name: 'memory-api-key'
-          value: memoryApiKey
+          keyVaultUrl: '${keyVaultUri}/secrets/eon-memory-api-key-${suffix}'
+          identity: managedIdentity.id
         }
       ]
     }
